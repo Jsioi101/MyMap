@@ -1067,6 +1067,15 @@ function openPlaceInfo(r, others){
 
 /* 지도 탭 → 근처 장소 카드 */
 const NEAR_CODES = ['FD6','CE7','MT1','CS2','HP8','PM9','AT4','CT1','AD5','BK9','OL7','AC5','SW8','PO3','SC4','PK6'];
+// 카카오 지도 바탕에 아이콘으로 잘 보이는 종류일수록 0에 가깝게, 잘 안 보이는 종류(의원·약국·학원·주차장)는 크게.
+// 누른 곳과의 거리(m)에 이 값을 더해 가장 작은 곳을 고른다.
+const NEAR_WEIGHT = { MT1:0, SW8:0, AT4:4, CT1:4, OL7:4, FD6:6, CE7:6, CS2:6, PO3:8, SC4:8, BK9:10, AD5:10, HP8:28, PM9:30, AC5:32, PK6:40 };
+function nearScore(p){
+  let w = NEAR_WEIGHT[p.groupCode] ?? 20;
+  // 큰 병원(종합병원·대학병원)은 지도에 아이콘이 잘 보인다
+  if (p.groupCode === 'HP8' && /종합병원|대학병원|병원\s*>\s*(?!.*의원)/.test(p.kakaoCategory || '') && !/의원/.test(p.name)) w = 8;
+  return (p.distance || 0) + w;
+}
 function closePop(){ if (popOverlay) { popOverlay.setMap(null); popOverlay = null; } }
 function showPop(r){
   closePop();
@@ -1097,7 +1106,7 @@ async function nearbyAt(latlng, radius){
   if (seq !== nearSeq) return;
   const seen = new Set(), found = [];
   lists.flat().forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); found.push(fromKakao(d)); } });
-  found.sort((x, y) => x.distance - y.distance);
+  found.sort((x, y) => nearScore(x) - nearScore(y) || x.distance - y.distance);
   if (!found.length) { closePop(); return; }
   showPop(found[0]);
   openPlaceInfo(found[0], found.slice(1, 15));
