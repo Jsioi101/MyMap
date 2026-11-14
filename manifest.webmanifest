@@ -1,6 +1,6 @@
 {
-  "name": "내 매장 지도",
-  "short_name": "매장지도",
+  "name": "내 지도",
+  "short_name": "내 지도",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
