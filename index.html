@@ -135,6 +135,8 @@ button{cursor:pointer}
 .pop .pc{font-size:12.5px;color:var(--muted);margin-top:2px}
 .pop .pa{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.4}
 .pop .pacts{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.pop .alt{display:block;width:100%;text-align:left;border:0;background:var(--soft);border-radius:8px;padding:6px 8px;margin-top:4px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop .alt span{color:var(--muted);font-size:12px}
 .pop .others{display:block;margin-top:8px;border:0;background:transparent;color:var(--accent);font-size:13px;font-weight:600;padding:0}
 .gate{position:fixed;inset:0;z-index:90;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;gap:14px}
 .gate[hidden]{display:none}
@@ -922,12 +924,14 @@ function showPop(r, others){
       ${r.placeUrl ? `<a class="btn sm" href="${esc(r.placeUrl)}" target="_blank" rel="noopener">상세정보</a>` : ''}
       <a class="btn sm" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a>
     </div>
-    ${others && others.length > 1 ? `<button class="others" data-a="others">근처 다른 곳 ${others.length - 1}개 보기 ›</button>` : ''}`;
+    ${others && others.length > 1 ? `<div class="alts"><div class="pc" style="margin-top:10px">혹시 이곳인가요?</div>${others.slice(1, 4).map((o, i) => `<button class="alt" data-a="alt" data-i="${i + 1}"><b>${esc(o.name)}</b> <span>${esc((o.kakaoCategory || '').split(' > ').slice(-1)[0])} · ${fmtDist(o.distance)}</span></button>`).join('')}</div>
+      ${others.length > 4 ? `<button class="others" data-a="others">근처 ${others.length}곳 모두 보기 ›</button>` : ''}` : ''}`;
   ['click','mousedown','touchstart','pointerdown'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation()));
   el.addEventListener('click', e => {
     const a = e.target.closest('[data-a]'); if (!a) return;
     if (a.dataset.a === 'x') closePop();
     else if (a.dataset.a === 'save') startSave(r);
+    else if (a.dataset.a === 'alt') { const o = others[+a.dataset.i]; showPop(o, [o, ...others.filter(x => x !== o)]); }
     else if (a.dataset.a === 'others') { results = others; lastPagination = null; resultsMode = 'nearby'; resultsTitle = '누른 곳 근처'; clearGas(); renderResults(); showTab('results'); }
   });
   popOverlay = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(r.lat, r.lng), content: el, xAnchor: 0, yAnchor: 0, zIndex: 30, clickable: true });
@@ -1258,17 +1262,39 @@ $('#btnWipe').onclick = async () => {
   }
 };
 
+/* 지도 탭 감지: 짧게 누르고 거의 안 움직이면 탭, 두 번 연속 탭(확대)은 무시 */
+function bindMapTap(){
+  const el = $('#map');
+  let down = null, tapTimer = null, lastTap = 0;
+  el.addEventListener('pointerdown', e => {
+    if (!e.isPrimary || e.target.closest('.pin,.pop,.gaspin,.me')) { down = null; return; }
+    down = { x:e.clientX, y:e.clientY, t:Date.now() };
+  }, true);
+  el.addEventListener('pointerup', e => {
+    if (!down || !e.isPrimary) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dur = Date.now() - down.t;
+    down = null;
+    if (moved > 8 || dur > 600) return;
+    const now = Date.now();
+    if (now - lastTap < 320) { clearTimeout(tapTimer); lastTap = 0; return; }
+    lastTap = now;
+    const r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => {
+      if (popOverlay) { closePop(); return; }
+      if (sheetIdx === 2) { setSheet(1); return; }
+      nearbyAt(map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(x, y)));
+    }, 300);
+  }, true);
+}
+
 /* ---------- boot ---------- */
 function fatal(html){ const d = document.createElement('div'); d.className = 'err'; d.innerHTML = html; document.body.appendChild(d); }
 function boot(){
   map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 });
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
-  kakao.maps.event.addListener(map, 'click', e => {
-    if (popOverlay) { closePop(); return; }
-    if (sheetIdx === 2) { setSheet(1); return; }
-    nearbyAt(e.latLng);
-  });
+  bindMapTap();
   setSheet(1);
   applyPrefsVisual(); renderSaved(); renderPins(); drawManage();
   startAuth();
