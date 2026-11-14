@@ -47,7 +47,10 @@ button{cursor:pointer}
 .fab{width:44px;height:44px;border-radius:50%;border:0;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);font-size:19px;display:grid;place-items:center}
 .sheet{position:fixed;left:0;right:0;bottom:0;height:calc(var(--sheet-h) + var(--safe-b));background:#fff;z-index:30;border-radius:18px 18px 0 0;
   box-shadow:0 -4px 20px rgba(0,0,0,.12);display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
-.sheet.anim{transition:height .22s ease}
+.sheet.anim{transition:height .22s ease,transform .22s ease}
+.sheet.hide{transform:translateY(105%);box-shadow:none}
+.restore{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:25;border:0;background:var(--fg);color:#fff;border-radius:999px;padding:11px 18px;font-weight:700;font-size:14.5px;box-shadow:0 4px 14px rgba(0,0,0,.25);display:flex;gap:8px;align-items:center}
+.restore[hidden]{display:none}
 .fabs.anim{transition:bottom .22s ease}
 .sheet-head{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
 .handle{padding:9px 0 5px;display:grid;place-items:center}
@@ -141,7 +144,7 @@ button{cursor:pointer}
 .slider b{width:44px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
 .sgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:4px 8px;margin-top:6px}
 .sgg label{display:flex;gap:5px;align-items:center;font-size:14px;padding:3px 0}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 20px);background:rgba(26,29,33,.92);color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 76px);background:rgba(26,29,33,.92);color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 /* map pins & popup */
 .pin{position:relative;transform:translate(-50%,-100%) scale(var(--pin-scale));transform-origin:50% 100%;cursor:pointer;display:flex;flex-direction:column;align-items:center;opacity:var(--pin-opacity)}
@@ -198,6 +201,7 @@ button{cursor:pointer}
     <button type="submit">검색</button>
   </form>
   <div class="quick">
+    <button class="qbtn" id="btnFav">⭐ 즐겨찾기 <span class="badge" id="favBadge" hidden></span></button>
     <button class="qbtn" id="btnGas">⛽ 주유소</button>
     <button class="qbtn" id="btnOptions">⚙️ 옵션 <span class="badge" id="optBadge" hidden></span></button>
     <button class="qbtn" id="btnNear">▢ 지도 안에서만 검색</button>
@@ -209,7 +213,9 @@ button{cursor:pointer}
   <button class="fab" id="btnLoc" title="내 위치">◎</button>
 </div>
 
-<section class="sheet" id="sheet">
+<button class="restore" id="btnRestore" hidden></button>
+
+<section class="sheet hide" id="sheet">
   <div class="sheet-head" id="sheetHead">
     <div class="handle"><span></span></div>
     <div class="tabs">
@@ -627,12 +633,31 @@ async function migrateLegacy(){
 
 /* ---------- sheet (drag) ---------- */
 function sheetStops(){ const h = window.innerHeight; return [Math.round(h * 0.13) + 40, Math.round(h * 0.46), Math.round(h * 0.86)]; }
-let sheetIdx = 1;
+let sheetIdx = -1;
 function setSheetPx(px, anim){
   $('#sheet').classList.toggle('anim', !!anim); $('#fabs').classList.toggle('anim', !!anim);
   document.documentElement.style.setProperty('--sheet-h', px + 'px');
 }
-function setSheet(i){ sheetIdx = Math.max(0, Math.min(2, i)); setSheetPx(sheetStops()[sheetIdx], true); }
+function setSheet(i){
+  sheetIdx = Math.max(-1, Math.min(2, i));
+  $('#sheet').classList.toggle('hide', sheetIdx < 0);
+  setSheetPx(sheetIdx < 0 ? 0 : sheetStops()[sheetIdx], true);
+  if (sheetIdx < 0) $('#sheet').style.height = '';
+  updateRestore();
+}
+function hasResults(){ return !!(results.length || placeView); }
+function updateRestore(){
+  const b = $('#btnRestore'); if (!b) return;
+  const show = sheetIdx < 0 && hasResults();
+  b.hidden = !show;
+  if (show) b.innerHTML = (placeView ? `📍 ${esc(placeView.name)}` : resultsMode === 'gas' ? `⛽ 주유소 ${results.length}곳` : `🔍 검색 결과 ${results.length}개`) + ' <span>▲</span>';
+  const fb = $('#btnFav'); if (fb) fb.classList.toggle('on', sheetIdx >= 0 && !$('#p-saved').hidden);
+}
+$('#btnRestore').onclick = () => { showTab('results'); setSheet(1); };
+$('#btnFav').onclick = () => {
+  if (sheetIdx >= 0 && !$('#p-saved').hidden) { setSheet(-1); return; }
+  showTab('saved'); closeDetail(); setSheet(1);
+};
 window.addEventListener('resize', () => setSheet(sheetIdx));
 (function dragSheet(){
   const head = $('#sheetHead');
@@ -650,7 +675,7 @@ window.addEventListener('resize', () => setSheet(sheetIdx));
     e.preventDefault();
     const now = performance.now(); vel = (e.clientY - lastY) / Math.max(1, now - lastT); lastY = e.clientY; lastT = now;
     const stops = sheetStops();
-    setSheetPx(Math.max(stops[0] - 30, Math.min(window.innerHeight * 0.92, h0 - dy)), false);
+    setSheetPx(Math.max(40, Math.min(window.innerHeight * 0.92, h0 - dy)), false);
   });
   const end = e => {
     if (y0 == null || e.pointerId !== pid) return;
@@ -659,8 +684,8 @@ window.addEventListener('resize', () => setSheet(sheetIdx));
     const h = $('#sheet').getBoundingClientRect().height, stops = sheetStops();
     let idx;
     if (vel < -0.5) { idx = stops.findIndex(v => v > h + 4); if (idx < 0) idx = 2; }
-    else if (vel > 0.5) { idx = -1; stops.forEach((v, i) => { if (v < h - 4) idx = i; }); if (idx < 0) idx = 0; }
-    else { idx = 0; stops.forEach((v, i) => { if (Math.abs(v - h) < Math.abs(stops[idx] - h)) idx = i; }); }
+    else if (vel > 0.5) { idx = -1; stops.forEach((v, i) => { if (v < h - 4) idx = i; }); }
+    else { idx = 0; stops.forEach((v, i) => { if (Math.abs(v - h) < Math.abs(stops[idx] - h)) idx = i; }); if (h < stops[0] - 25) idx = -1; }
     setSheet(idx);
     suppressClickUntil = Date.now() + 350;
   };
@@ -670,7 +695,7 @@ window.addEventListener('resize', () => setSheet(sheetIdx));
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
   ['saved','results'].forEach(n => $('#p-' + n).hidden = n !== name);
-  if (sheetIdx === 0) setSheet(1);
+  if (sheetIdx < 1) setSheet(1); else updateRestore();
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => { showTab(t.dataset.tab); if (t.dataset.tab === 'saved') closeDetail(); });
 
@@ -738,6 +763,7 @@ function applyPrefsVisual(){
 /* ---------- saved list ---------- */
 function renderSaved(){
   $('#cnt').textContent = places.length ? `(${places.length})` : '';
+  $('#favBadge').hidden = !places.length; $('#favBadge').textContent = places.length;
   const f = prefs.filter;
   // region chips
   const rc = [{id:'', name:'전체 지역'}, ...regions];
@@ -924,7 +950,7 @@ $('#q').addEventListener('input', updateClear);
 $('#qClear').onclick = () => {
   $('#q').value = ''; results = []; lastPagination = null; resultsMode = 'search'; placeView = null;
   clearTemp(); clearGas(); closePop();
-  $('#resultItems').innerHTML = EMPTY_RESULTS; showTab('saved'); closeDetail(); updateClear();
+  $('#resultItems').innerHTML = EMPTY_RESULTS; closeDetail(); setSheet(-1); updateClear();
 };
 let results = [], lastPagination = null, resultsMode = 'search', resultsTitle = '';
 function fromKakao(d){ return {kakaoId:d.id, name:d.place_name, address:d.address_name, roadAddress:d.road_address_name, phone:d.phone, lat:+d.y, lng:+d.x, placeUrl:d.place_url, kakaoCategory:d.category_name, groupCode:d.category_group_code, distance: d.distance ? +d.distance : null}; }
@@ -1406,8 +1432,7 @@ function bindMapTap(){
     const r = el.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     clearTimeout(tapTimer);
     tapTimer = setTimeout(() => {
-      if (popOverlay) { closePop(); return; }
-      if (sheetIdx === 2) { setSheet(1); return; }
+      if (popOverlay || sheetIdx >= 0) { closePop(); setSheet(-1); return; }
       const proj = map.getProjection();
       const p1 = proj.coordsFromContainerPoint(new kakao.maps.Point(x, y)), p2 = proj.coordsFromContainerPoint(new kakao.maps.Point(x + 22, y));
       const rad = Math.max(8, Math.min(80, haversine({ lat:p1.getLat(), lng:p1.getLng() }, { lat:p2.getLat(), lng:p2.getLng() })));
@@ -1423,7 +1448,7 @@ function boot(){
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
   bindMapTap();
-  setSheet(1); $('#resultItems').innerHTML = EMPTY_RESULTS;
+  setSheet(-1); $('#resultItems').innerHTML = EMPTY_RESULTS;
   applyPrefsVisual(); renderSaved(); renderPins(); drawManage();
   startAuth();
 }
