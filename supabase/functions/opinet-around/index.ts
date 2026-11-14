@@ -121,7 +121,7 @@ async function resolveUrl(url: string): Promise<string> {
 
 function pickShareId(url: string): string | null {
   const u = decodeURIComponent(url);
-  const m = u.match(/folder\/([0-9a-zA-Z]{16,64})/) || u.match(/[?&](?:folderShareId|shareId|folderId)=([0-9a-zA-Z]{16,64})/) || u.match(/shares\/([0-9a-zA-Z]{16,64})/);
+  const m = u.match(/folder\/([0-9a-zA-Z]{16,64})/) || u.match(/detail-list\/([0-9a-zA-Z]{16,64})/) || u.match(/[?&](?:folderShareId|shareId|folderId|id)=([0-9a-zA-Z]{16,64})/) || u.match(/shares\/([0-9a-zA-Z]{16,64})/);
   return m ? m[1] : null;
 }
 

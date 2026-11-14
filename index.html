@@ -1543,12 +1543,24 @@ function sameShop(a, b){
   return haversine(a, b) < 60;
 }
 let nvData = null;
+// 네이버 단축 링크는 앱 연결 주소(…appLink…id=폴더ID)로 넘어가므로, 서버가 폴더 ID를 못 찾으면 그 ID로 다시 요청한다.
+async function naverFetch(url){
+  const ask = async u => { const { data, error } = await sb.functions.invoke(FN_GAS, { body: { action:'naver-import', url:u } }); if (error) { await invokeFn(FN_GAS, { action:'naver-import', url:u }); } return data || {}; };
+  let d = await ask(url);
+  if (d.error) {
+    const src = decodeURIComponent((d.finalUrl || '') + ' ' + url);
+    const m = src.match(/[?&]id=([0-9a-f]{20,64})/i) || src.match(/detail-list\/([0-9a-f]{20,64})/i) || src.match(/folder\/([0-9a-f]{20,64})/i);
+    if (m) d = await ask(`https://pages.map.naver.com/save-pages/api/maps-bookmark/v3/shares/${m[1]}`);
+  }
+  if (d.error) throw new Error(d.error);
+  return d;
+}
 $('#nvLoad').onclick = async () => {
   const url = $('#nvUrl').value.trim();
   if (!url) return toast('네이버 지도 공유 링크를 넣어 주세요');
   $('#nvPreview').innerHTML = '<p class="meta">불러오는 중…</p>';
   try {
-    const d = await invokeFn(FN_GAS, { action:'naver-import', url });
+    const d = await naverFetch(url);
     const incoming = d.places || [];
     const dup = [], fresh = [];
     incoming.forEach(p => {
