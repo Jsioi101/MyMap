@@ -21,11 +21,4 @@
 2. Supabase → Edge Functions → Deploy a new function → Via Editor → 이름 `opinet-around`, 내용은 `supabase/functions/opinet-around/index.ts`
 3. Supabase → Edge Functions → Secrets 에 `OPINET_KEY` = 인증키
 
-## 네이버 리뷰 (선택)
-
-지도에서 가게를 누르면 네이버 블로그 리뷰(제목·사진)와 사진을 보여 준다. 네이버 지도 방문자 리뷰는 공개 API가 없어 네이버 지도 링크로 연다.
-
-1. 네이버 검색 API 는 2026년 7월부터 네이버 클라우드 플랫폼(NAVER API HUB)에서만 새로 신청할 수 있다.
-   ncloud.com 가입(결제 카드 등록) → 콘솔 Services → Application Services → NAVER API HUB → Subscription 이용 신청 → Application 등록(검색 API 선택) → 인증 정보의 Client ID / Client Secret 확인
-2. Supabase → Edge Functions → Deploy a new function → Via Editor → 이름 `naver-reviews`, 내용은 `supabase/functions/naver-reviews/index.ts`
-3. Supabase → Edge Functions → Secrets 에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` 추가
+가게 정보 화면의 **네이버 검색 / 구글 검색** 버튼은 가게 이름 + 지역으로 각 검색 사이트를 새 창으로 연다.

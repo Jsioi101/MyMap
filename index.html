@@ -366,7 +366,6 @@ const SB_URL = 'https://llplznxiejjbczhqfwey.supabase.co';
 const SB_KEY = 'sb_publishable_Qf-bDwGVwsBmogHBZrUVwQ_N84c1xFm';
 // Supabase Edge Function 주소(슬러그). 대시보드 이름과 다를 수 있으니 함수 URL 끝부분을 넣는다.
 const FN_GAS = 'rapid-endpoint';      // 오피넷 주유소 가격 (opinet-around)
-const FN_REVIEWS = 'naver-reviews';   // 네이버 블로그 리뷰
 const LEGACY_STORE = 'mymap.places.v1';
 const LEGACY_CATS = 'mymap.cats.v1';
 
@@ -821,13 +820,13 @@ function openDetail(id, move){
       <a class="btn pri" href="${esc(kakaoLink(p))}" target="_blank" rel="noopener">카카오맵에서 보기</a>
       <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(p.name)},${p.lat},${p.lng}" target="_blank" rel="noopener">길찾기</a>
       <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(p.name + ' ' + addrParts(p).sgg)}" target="_blank" rel="noopener">네이버지도</a>
+      ${searchLinks(p)}
     </div>
     <div class="acts">
       <button class="btn" id="dEdit">수정</button>
       <button class="btn danger" id="dDel">삭제</button>
     </div>
-    <div class="meta" style="margin-top:12px;font-size:12px">저장: ${new Date(p.createdAt).toLocaleDateString('ko-KR')}</div>
-    <div id="dReviews"></div>`;
+    <div class="meta" style="margin-top:12px;font-size:12px">저장: ${new Date(p.createdAt).toLocaleDateString('ko-KR')}</div>`;
   $('#dBack').onclick = closeDetail;
   $('#dEdit').onclick = () => openEdit(p);
   $('#dDel').onclick = async () => {
@@ -839,7 +838,6 @@ function openDetail(id, move){
   renderPins();
   if (move !== false) focusOn(p.lat, p.lng, Math.min(map.getLevel(), 4));
   $('#p-saved').scrollTop = 0;
-  if (user) loadReviews(p, $('#dReviews'));
 }
 function closeDetail(){
   selectedId = null; $('#detail').hidden = true; $('#savedList').hidden = false;
@@ -996,8 +994,13 @@ function pickResult(i){
   updateClear();
 }
 
-/* ---------- 장소 정보 + 네이버 리뷰 ---------- */
-const reviewCache = {};
+/* ---------- 장소 정보 ---------- */
+function searchLinks(p){
+  const { sido, sgg } = addrParts(p);
+  const q = `${p.name} ${sgg || sido}`.trim();
+  return `<a class="btn" href="https://search.naver.com/search.naver?query=${encodeURIComponent(q)}" target="_blank" rel="noopener">네이버 검색</a>
+      <a class="btn" href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">구글 검색</a>`;
+}
 function openPlaceInfo(r){
   placeView = r; showTab('results'); if (sheetIdx < 1) setSheet(1);
   const s = isSaved(r), area = addrParts(r).sgg || addrParts(r).sido;
@@ -1011,43 +1014,13 @@ function openPlaceInfo(r){
       ${r.placeUrl ? `<a class="btn" href="${esc(r.placeUrl)}" target="_blank" rel="noopener">카카오 상세</a>` : ''}
       <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a>
       <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(area + ' ' + r.name)}" target="_blank" rel="noopener">네이버지도</a>
+      ${searchLinks(r)}
     </div>
-    <div id="pvReviews"></div>
   </div>`;
   const back = $('#pvBack'); if (back) back.onclick = () => { placeView = null; renderResults(); };
   $('#pvSave').onclick = () => startSave(r);
   $('#p-results').scrollTop = 0;
-  loadReviews(r, $('#pvReviews'));
   updateClear();
-}
-async function loadReviews(p, box){
-  if (!box) return;
-  const area = addrParts(p).sgg || addrParts(p).sido;
-  const q = `${area} ${p.name}`.trim();
-  const links = `<div class="acts">
-      <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(q)}" target="_blank" rel="noopener">네이버 지도 방문자 리뷰</a>
-      <a class="btn" href="https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(q)}" target="_blank" rel="noopener">블로그 더 보기</a>
-    </div>`;
-  box.innerHTML = `<h3>네이버 리뷰</h3><p class="meta">불러오는 중…</p>`;
-  const key = (p.kakaoId || '') + '|' + q;
-  if (!reviewCache[key]) reviewCache[key] = invokeFn(FN_REVIEWS, { name: p.name, area });
-  try {
-    const d = await reviewCache[key];
-    if (!box.isConnected) return;
-    const imgs = (d.images || []).filter(x => x.thumb);
-    box.innerHTML = `<h3>네이버 블로그 리뷰</h3>
-      ${(d.blogs || []).length ? d.blogs.map(b => `<a class="rv" href="${esc(b.link)}" target="_blank" rel="noopener">
-          ${b.thumb ? `<img src="${esc(b.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="" onerror="this.outerHTML='<span class=noimg>📝</span>'">` : '<span class="noimg">📝</span>'}
-          <div><b>${esc(b.title)}</b><small>${esc(b.blogger)}${b.date ? ' · ' + esc(b.date) : ''}</small><p>${esc(b.desc)}</p></div>
-        </a>`).join('') : '<p class="meta">블로그 리뷰를 찾지 못했어요.</p>'}
-      ${imgs.length ? `<h3>사진</h3><div class="photos">${imgs.map(x => `<a href="https://search.naver.com/search.naver?where=image&query=${encodeURIComponent(q)}" target="_blank" rel="noopener"><img src="${esc(x.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt=""></a>`).join('')}</div>` : ''}
-      ${links}
-      <p class="meta" style="font-size:12px">네이버 지도 방문자 리뷰는 공개 API가 없어서 네이버 지도에서 바로 열어 드려요.</p>`;
-  } catch (e) {
-    delete reviewCache[key];
-    if (!box.isConnected) return;
-    box.innerHTML = `<h3>네이버 리뷰</h3><p class="meta">리뷰를 불러오지 못했어요. ${esc(e.message || e)}</p>${links}`;
-  }
 }
 
 /* 지도 탭 → 근처 장소 카드 */
