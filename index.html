@@ -907,7 +907,7 @@ async function invokeFn(name, body){
   if (error) {
     let msg = error.message || String(error);
     try { const j = await error.context.json(); if (j && (j.error || j.message || j.msg)) msg = j.error || j.message || j.msg; } catch(_){}
-    if (error.context && error.context.status === 404) msg = '서버 기능(' + name + ')이 아직 배포되지 않았어요';
+    if ((error.context && error.context.status === 404) || /Failed to send/i.test(msg)) msg = `Supabase에 '${name}' 함수가 없어요. Edge Functions 목록에서 이름이 정확히 ${name} 인지 확인해 주세요.`;
     throw new Error(msg);
   }
   if (data && data.error) throw new Error(data.error);
