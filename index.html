@@ -936,6 +936,18 @@ function showPop(r, others){
   });
   popOverlay = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(r.lat, r.lng), content: el, xAnchor: 0, yAnchor: 0, zIndex: 30, clickable: true });
   popOverlay.setMap(map);
+  requestAnimationFrame(() => keepPopVisible(r, el));
+}
+function keepPopVisible(r, el){
+  const pt = map.getProjection().containerPointFromCoords(new kakao.maps.LatLng(r.lat, r.lng));
+  const W = $('#map').clientWidth, H = window.innerHeight - sheetPx();
+  const top = pt.y - el.offsetHeight - 16, topLimit = $('.topbar').getBoundingClientRect().bottom + 8;
+  let dx = 0, dy = 0;
+  if (top < topLimit) dy = top - topLimit;
+  else if (pt.y > H - 10) dy = pt.y - (H - 10);
+  const half = el.offsetWidth / 2 + 8;
+  if (pt.x - half < 0) dx = pt.x - half; else if (pt.x + half > W) dx = pt.x + half - W;
+  if (dx || dy) map.panBy(Math.round(dx), Math.round(dy));
 }
 let nearSeq = 0;
 async function nearbyAt(latlng){
