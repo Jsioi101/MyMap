@@ -659,38 +659,73 @@ $('#btnFav').onclick = () => {
   showTab('saved'); closeDetail(); setSheet(1);
 };
 window.addEventListener('resize', () => setSheet(sheetIdx));
+function snapSheet(h, vel){
+  const stops = sheetStops();
+  let idx;
+  if (vel > 0.5) idx = -1;                       // 아래로 빠르게 → 최소화(숨김)
+  else if (vel < -0.5) idx = 2;                  // 위로 빠르게 → 크게
+  else { idx = 0; stops.forEach((v, i) => { if (Math.abs(v - h) < Math.abs(stops[idx] - h)) idx = i; }); if (h < stops[0] - 25) idx = -1; }
+  setSheet(idx);
+}
 (function dragSheet(){
-  const head = $('#sheetHead');
-  let y0 = null, h0 = 0, moved = false, lastY = 0, lastT = 0, vel = 0, pid = null, suppressClickUntil = 0;
-  head.addEventListener('click', ev => { if (Date.now() < suppressClickUntil) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+  const sheet = $('#sheet'), head = $('#sheetHead');
+  const maxH = () => window.innerHeight * 0.92;
+  const activePanel = () => sheet.querySelector('.panel:not([hidden])');
+  let suppressClickUntil = 0;
+  sheet.addEventListener('click', ev => { if (Date.now() < suppressClickUntil) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+
+  // 터치: 하단 시트 어디서든 끌어 올리고 내리기. 목록이 맨 위일 때 아래로 끌면 시트가 내려가고, 덜 펼쳐졌을 때 위로 끌면 시트가 올라간다.
+  let t0 = null, h0 = 0, mode = null, lastY = 0, lastT = 0, vel = 0;
+  sheet.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || e.target.closest('input[type=range],textarea,select')) { t0 = null; return; }
+    const t = e.touches[0];
+    t0 = { x:t.clientX, y:t.clientY }; h0 = sheet.getBoundingClientRect().height; mode = null;
+    lastY = t.clientY; lastT = performance.now(); vel = 0;
+  }, { passive:true });
+  sheet.addEventListener('touchmove', e => {
+    if (!t0) return;
+    const t = e.touches[0], dy = t.clientY - t0.y, dx = t.clientX - t0.x;
+    if (mode === null) {
+      if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
+      if (Math.abs(dx) > Math.abs(dy)) { mode = 'none'; return; }
+      const p = activePanel(), atTop = !p || p.scrollTop <= 0, inHead = !!e.target.closest('#sheetHead');
+      mode = (inHead || (dy > 0 && atTop) || (dy < 0 && sheetIdx < 2)) ? 'drag' : 'none';
+    }
+    if (mode !== 'drag') return;
+    e.preventDefault();
+    const now = performance.now(); vel = (t.clientY - lastY) / Math.max(1, now - lastT); lastY = t.clientY; lastT = now;
+    setSheetPx(Math.max(40, Math.min(maxH(), h0 - dy)), false);
+  }, { passive:false });
+  const tend = () => {
+    if (t0 && mode === 'drag') { snapSheet(sheet.getBoundingClientRect().height, vel); suppressClickUntil = Date.now() + 350; }
+    t0 = null; mode = null;
+  };
+  sheet.addEventListener('touchend', tend);
+  sheet.addEventListener('touchcancel', tend);
+
+  // 마우스(PC): 시트 위쪽 손잡이·탭 줄을 끌기
+  let y0 = null, mh0 = 0, moved = false, mLastY = 0, mLastT = 0, mVel = 0;
   head.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    y0 = e.clientY; h0 = $('#sheet').getBoundingClientRect().height; moved = false; lastY = e.clientY; lastT = performance.now(); vel = 0; pid = e.pointerId;
+    if (e.pointerType === 'touch' || e.button !== 0) return;
+    y0 = e.clientY; mh0 = sheet.getBoundingClientRect().height; moved = false; mLastY = e.clientY; mLastT = performance.now(); mVel = 0;
   });
   window.addEventListener('pointermove', e => {
-    if (y0 == null || e.pointerId !== pid) return;
+    if (y0 == null || e.pointerType === 'touch') return;
     const dy = e.clientY - y0;
     if (!moved && Math.abs(dy) < 6) return;
-    if (!moved) moved = true;
-    e.preventDefault();
-    const now = performance.now(); vel = (e.clientY - lastY) / Math.max(1, now - lastT); lastY = e.clientY; lastT = now;
-    const stops = sheetStops();
-    setSheetPx(Math.max(40, Math.min(window.innerHeight * 0.92, h0 - dy)), false);
+    moved = true; e.preventDefault();
+    const now = performance.now(); mVel = (e.clientY - mLastY) / Math.max(1, now - mLastT); mLastY = e.clientY; mLastT = now;
+    setSheetPx(Math.max(40, Math.min(maxH(), mh0 - dy)), false);
   });
-  const end = e => {
-    if (y0 == null || e.pointerId !== pid) return;
+  const mend = e => {
+    if (y0 == null || e.pointerType === 'touch') return;
     y0 = null;
     if (!moved) return;
-    const h = $('#sheet').getBoundingClientRect().height, stops = sheetStops();
-    let idx;
-    if (vel < -0.5) { idx = stops.findIndex(v => v > h + 4); if (idx < 0) idx = 2; }
-    else if (vel > 0.5) { idx = -1; stops.forEach((v, i) => { if (v < h - 4) idx = i; }); }
-    else { idx = 0; stops.forEach((v, i) => { if (Math.abs(v - h) < Math.abs(stops[idx] - h)) idx = i; }); if (h < stops[0] - 25) idx = -1; }
-    setSheet(idx);
+    snapSheet(sheet.getBoundingClientRect().height, mVel);
     suppressClickUntil = Date.now() + 350;
   };
-  window.addEventListener('pointerup', end);
-  window.addEventListener('pointercancel', end);
+  window.addEventListener('pointerup', mend);
+  window.addEventListener('pointercancel', mend);
 })();
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
@@ -1099,17 +1134,24 @@ function keepPopVisible(r, el){
   if (dx || dy) map.panBy(Math.round(dx), Math.round(dy));
 }
 let nearSeq = 0;
-async function nearbyAt(latlng, radius){
+// 바탕 지도에 아이콘으로 표시되는 종류. 의원·약국·학원·주차장처럼 아이콘이 거의 없는 곳은 주인공으로 고르지 않는다.
+const ICON_CODES = new Set(['MT1','SW8','AT4','CT1','OL7','FD6','CE7','CS2','PO3','SC4','BK9','AD5']);
+const isIconPlace = p => ICON_CODES.has(p.groupCode) || (p.groupCode === 'HP8' && /종합병원|대학병원/.test(p.kakaoCategory || '') && !/의원/.test(p.name));
+const TAP_PX = 18;   // 아이콘으로 인정하는 손가락 반경(화면 픽셀)
+async function nearbyAt(latlng, mPerPx){
   const seq = ++nearSeq;
-  const one = code => new Promise(res => ps.categorySearch(code, (data, st) => res(st === kakao.maps.services.Status.OK ? data : []), { location: latlng, radius: Math.round(radius), sort: kakao.maps.services.SortBy.DISTANCE }));
+  const hit = Math.max(3, TAP_PX * mPerPx);                 // 이 안에 아이콘 장소가 있어야 반응
+  const search = Math.max(10, Math.min(120, 40 * mPerPx));  // 후보 목록용
+  const one = code => new Promise(res => ps.categorySearch(code, (data, st) => res(st === kakao.maps.services.Status.OK ? data : []), { location: latlng, radius: Math.round(search), sort: kakao.maps.services.SortBy.DISTANCE }));
   const lists = await Promise.all(NEAR_CODES.map(one));
   if (seq !== nearSeq) return;
   const seen = new Set(), found = [];
   lists.flat().forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); found.push(fromKakao(d)); } });
-  found.sort((x, y) => nearScore(x) - nearScore(y) || x.distance - y.distance);
-  if (!found.length) { closePop(); return; }
-  showPop(found[0]);
-  openPlaceInfo(found[0], found.slice(1, 15));
+  const main = found.filter(p => isIconPlace(p) && p.distance <= hit).sort((x, y) => nearScore(x) - nearScore(y) || x.distance - y.distance)[0];
+  if (!main) { closePop(); return; }
+  const others = found.filter(p => p !== main).sort((x, y) => x.distance - y.distance).slice(0, 12);
+  showPop(main);
+  openPlaceInfo(main, others);
 }
 
 /* ---------- gas stations ---------- */
@@ -1441,9 +1483,8 @@ function bindMapTap(){
     tapTimer = setTimeout(() => {
       if (popOverlay || sheetIdx >= 0) { closePop(); setSheet(-1); return; }
       const proj = map.getProjection();
-      const p1 = proj.coordsFromContainerPoint(new kakao.maps.Point(x, y)), p2 = proj.coordsFromContainerPoint(new kakao.maps.Point(x + 22, y));
-      const rad = Math.max(8, Math.min(80, haversine({ lat:p1.getLat(), lng:p1.getLng() }, { lat:p2.getLat(), lng:p2.getLng() })));
-      nearbyAt(p1, rad);
+      const p1 = proj.coordsFromContainerPoint(new kakao.maps.Point(x, y)), p2 = proj.coordsFromContainerPoint(new kakao.maps.Point(x + 1, y));
+      nearbyAt(p1, haversine({ lat:p1.getLat(), lng:p1.getLng() }, { lat:p2.getLat(), lng:p2.getLng() }));
     }, 300);
   }, true);
 }
