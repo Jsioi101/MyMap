@@ -1,5 +1,6 @@
-// 내 지도: 가게 이름으로 네이버 블로그 리뷰와 사진을 찾아 돌려준다. (네이버 검색 오픈 API)
-// 필요한 시크릿: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET (developers.naver.com 에서 '검색' API 로 앱 등록)
+// 내 지도: 가게 이름으로 네이버 블로그 리뷰와 사진을 찾아 돌려준다.
+// 네이버 검색 API 는 2026년부터 네이버 클라우드 플랫폼의 NAVER API HUB 에서 제공된다.
+// 필요한 시크릿: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET (NAVER API HUB Application 의 인증 정보)
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -11,9 +12,9 @@ const strip = (s: string) =>
   (s || "").replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
 
 async function naver(path: string, params: Record<string, string>, id: string, secret: string) {
-  const u = new URL(`https://openapi.naver.com/v1/search/${path}`);
-  u.search = new URLSearchParams(params).toString();
-  const r = await fetch(u, { headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret }, signal: AbortSignal.timeout(6000) });
+  const u = new URL(`https://naverapihub.apigw.ntruss.com/search/v1/${path}`);
+  u.search = new URLSearchParams({ ...params, format: "json" }).toString();
+  const r = await fetch(u, { headers: { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret }, signal: AbortSignal.timeout(6000) });
   if (!r.ok) throw new Error(`네이버 검색 오류 ${r.status}: ${(await r.text()).slice(0, 120)}`);
   return await r.json();
 }
@@ -44,8 +45,8 @@ Deno.serve(async (req) => {
     const query = `${area} ${name}`.trim();
 
     const [blog, image] = await Promise.all([
-      naver("blog.json", { query, display: "8", sort: "sim" }, id, secret),
-      naver("image.json", { query, display: "10", sort: "sim", filter: "medium" }, id, secret).catch(() => ({ items: [] })),
+      naver("blog", { query, display: "8", sort: "sim" }, id, secret),
+      naver("image", { query, display: "10", sort: "sim", filter: "medium" }, id, secret).catch(() => ({ items: [] })),
     ]);
     const items = (blog.items || []).slice(0, 8);
     const thumbs = await Promise.all(items.map((it: { link: string }) => ogImage(it.link)));
