@@ -137,8 +137,9 @@ async function naverImport(input: string): Promise<any> {
   const items: unknown[] = [];
   let folderName = "";
   for (let start = 0; start < 5000; start += 1000) {
-    const api = `https://pages.map.naver.com/save-pages/api/maps-bookmark/v3/shares/${shareId}/bookmarks?start=${start}&limit=1000&sort=lastUseTime&mcids=ALL&createIdNo=false`;
-    const r = await fetch(api, { headers: { "User-Agent": UA, "Referer": "https://map.naver.com/", "Accept": "application/json" }, signal: AbortSignal.timeout(8000) });
+    const api = `https://pages.map.naver.com/save-pages/api/maps-bookmark/v3/shares/${shareId}/bookmarks?start=${start}&limit=1000&sort=lastUseTime&mcids=ALL&createIdNo=false&lang=ko&language=ko`;
+    // 서버가 해외에 있어 기본이 영어 이름이므로 한국어를 명시한다
+    const r = await fetch(api, { headers: { "User-Agent": UA, "Referer": "https://map.naver.com/", "Accept": "application/json", "Accept-Language": "ko-KR,ko;q=0.9", "Cookie": "NNB=; page_uid=; lang=ko" }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { error: `네이버 응답 오류 ${r.status}. 폴더가 '공개'로 공유돼 있는지 확인해 주세요.`, finalUrl };
     // deno-lint-ignore no-explicit-any
     const d: any = await r.json();
@@ -152,7 +153,10 @@ async function naverImport(input: string): Promise<any> {
     const lng = Number(b.px ?? b.x ?? b.lng ?? b.longitude);
     const lat = Number(b.py ?? b.y ?? b.lat ?? b.latitude);
     return {
-      name: String(b.displayName || b.name || "").trim(),
+      // 한글이 들어 있는 이름을 우선한다 (name / displayName / koreanName 중)
+      name: String([b.koreanName, b.name, b.displayName, b.placeName].find((x) => x && /[가-힣]/.test(String(x))) || b.name || b.displayName || "").trim(),
+      altName: String(b.displayName || b.name || "").trim(),
+      fields: Object.keys(b).join(","),
       address: String(b.address || b.roadAddress || "").trim(),
       lat, lng,
       category: String(b.mcidName || b.category || b.categoryName || "").trim(),
