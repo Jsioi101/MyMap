@@ -1172,7 +1172,7 @@ function bindFuel(){ const s = $('#fuelSel'); if (s) s.onchange = () => { prefs.
 function drawGasPins(){
   clearGas();
   const min = gasInfo.priced && results.length ? Math.min(...results.map(r => r.price)) : null;
-  results.slice(0, 40).forEach((r, i) => {
+  results.slice(0, 20).forEach((r, i) => {
     const el = document.createElement('div');
     el.className = 'gaspin' + (r.price != null && r.price === min ? ' best' : '');
     const short = r.name.replace(/^(\(주\)|㈜|\(유\)|주식회사)\s*/, '').slice(0, 9);
