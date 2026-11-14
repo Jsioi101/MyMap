@@ -312,6 +312,11 @@ button{cursor:pointer}
 
       
     </div></details>
+    <details id="nvDetails"><summary>네이버 지도 즐겨찾기 가져오기</summary><div class="dbody">
+      <p class="meta">네이버 지도 › 저장 › 폴더 › <b>공유</b>로 만든 링크(naver.me/…)를 붙여넣으세요. 폴더가 공개로 공유돼 있어야 해요. 이름과 주소가 같은 곳이 이미 내 지도에 있으면 내 지도 쪽을 그대로 두고 건너뜁니다.</p>
+      <div style="display:flex;gap:6px;margin-top:8px"><input id="nvUrl" type="url" placeholder="https://naver.me/..." style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:15px"><button class="btn pri" id="nvLoad">불러오기</button></div>
+      <div id="nvPreview"></div>
+    </div></details>
     <details><summary>계정 · 백업</summary><div class="dbody">
       <p class="meta" id="acct"></p>
       <div class="acts"><button class="btn" id="btnLogout">로그아웃</button></div>
@@ -507,7 +512,7 @@ function guessCat(k){
   if (/카페|CE7/.test(s)) return /제과|베이커리/.test(s) ? '베이커리' : '카페';
   if (/제과|베이커리|빵/.test(s)) return '베이커리';
   if (/술집|호프|와인|이자카야|요리주점/.test(s)) return '술집';
-  if (/음식점|FD6/.test(s)) return '음식점';
+  if (/음식점|FD6|한식|일식|중식|양식|분식|고기|구이|국밥|국수|냉면|치킨|피자|햄버거|돈가스|초밥|횟집|해물|생선|찌개|전골|족발|보쌈|뷔페|레스토랑|식당/.test(s)) return '음식점';
   if (/쇼핑|MT1|가정,생활|패션|백화점/.test(s)) return '쇼핑';
   if (/CS2|편의점|생활|세탁|미용/.test(s)) return '생활';
   return '기타';
@@ -1526,6 +1531,76 @@ function bindMapTap(){
   }, true);
 }
 
+/* ---------- 네이버 지도 즐겨찾기 가져오기 ---------- */
+const normName = s => String(s || '').replace(/\s+/g, '').replace(/[()（）\[\]·.,-]/g, '').toLowerCase();
+const normAddr = s => String(s || '').replace(/\s+/g, '').replace(/^(서울특별시|서울시)/, '서울').replace(/^경기도/, '경기').toLowerCase();
+function sameShop(a, b){
+  const na = normName(a.name), nb = normName(b.name);
+  const nameOk = na && nb && (na === nb || na.includes(nb) || nb.includes(na));
+  if (!nameOk) return false;
+  const addrA = [a.address, a.roadAddress].map(normAddr).filter(Boolean), addrB = [b.address, b.roadAddress].map(normAddr).filter(Boolean);
+  if (addrA.some(x => addrB.some(y => x === y || x.includes(y) || y.includes(x)))) return true;
+  return haversine(a, b) < 60;
+}
+let nvData = null;
+$('#nvLoad').onclick = async () => {
+  const url = $('#nvUrl').value.trim();
+  if (!url) return toast('네이버 지도 공유 링크를 넣어 주세요');
+  $('#nvPreview').innerHTML = '<p class="meta">불러오는 중…</p>';
+  try {
+    const d = await invokeFn(FN_GAS, { action:'naver-import', url });
+    const incoming = d.places || [];
+    const dup = [], fresh = [];
+    incoming.forEach(p => {
+      const np = { ...p, roadAddress: '' };
+      if (places.some(x => sameShop(x, np)) || fresh.some(x => sameShop(x, np))) dup.push(np); else fresh.push(np);
+    });
+    nvData = { folder: d.folderName || '', fresh, dup };
+    const catCount = {};
+    fresh.forEach(p => { const c = guessCat({ kakaoCategory: p.category }); catCount[c] = (catCount[c] || 0) + 1; });
+    $('#nvPreview').innerHTML = `<div class="note" style="margin:10px 0">
+        <b>${esc(nvData.folder || '네이버 즐겨찾기')}</b> · ${incoming.length}곳<br>
+        새로 추가 <b>${fresh.length}곳</b>${dup.length ? ` · 이미 있어서 건너뜀 ${dup.length}곳` : ''}<br>
+        <span style="font-size:12px">${Object.entries(catCount).map(([c, n]) => `${esc(catInfo(c).emoji)} ${esc(c)} ${n}`).join(' · ')}</span>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" id="nvTag" checked> 폴더 이름(${esc(nvData.folder || '네이버')})을 태그로 붙이기</label>
+      <div style="max-height:180px;overflow:auto;margin:8px 0;font-size:13px;color:var(--muted)">${fresh.slice(0, 200).map(p => `• ${esc(p.name)} <span style="font-size:12px">${esc(p.category)}</span>`).join('<br>')}</div>
+      <div class="acts"><button class="btn pri" id="nvGo" ${fresh.length ? '' : 'disabled'}>${fresh.length}곳 가져오기</button></div>`;
+    const go = $('#nvGo'); if (go) go.onclick = nvImport;
+  } catch (e) {
+    $('#nvPreview').innerHTML = `<p class="meta" style="color:var(--danger)">${esc(e.message || e)}</p>`;
+  }
+};
+async function nvImport(){
+  if (!nvData || !nvData.fresh.length) return;
+  const tag = $('#nvTag') && $('#nvTag').checked ? (nvData.folder || '네이버').replace(/[,#]/g, ' ').trim() : '';
+  const now = Date.now();
+  const list = nvData.fresh.map((p, i) => {
+    const c = guessCat({ kakaoCategory: p.category });
+    return { id:newId(), kakaoId:null, name:p.name, address:p.address, roadAddress:'', phone:'', lat:p.lat, lng:p.lng, placeUrl:'',
+      kakaoCategory:p.category, categories:[c], category:c, tags: tag ? [tag] : [], memo:p.memo || '', rating:0, visited:false,
+      createdAt: now + i, updatedAt: now + i };
+  });
+  $('#nvGo').disabled = true; $('#nvGo').textContent = '저장 중…';
+  places.push(...list);
+  refreshAll();
+  if (await savePlaces(list)) {
+    toast(`네이버 즐겨찾기 ${list.length}곳을 가져왔어요`);
+    $('#nvPreview').innerHTML = `<p class="meta">${list.length}곳을 추가했어요.</p>`; $('#nvUrl').value = ''; nvData = null;
+    $('#optModal').hidden = true; showTab('saved'); closeDetail(); setSheet(1);
+  } else { await loadAll(); }
+}
+
+/* ---------- 처음 위치: 내 현재 위치 ---------- */
+let geoStart = Promise.resolve(false);
+function startAtMyLocation(){
+  geoStart = getPosition().then(pos => {
+    if (!pos) return false;
+    showMe(pos); map.setLevel(4); map.setCenter(new kakao.maps.LatLng(pos.lat, pos.lng));
+    return true;
+  });
+}
+
 /* ---------- boot ---------- */
 function fatal(html){ const d = document.createElement('div'); d.className = 'err'; d.innerHTML = html; document.body.appendChild(d); }
 function boot(){
@@ -1535,6 +1610,7 @@ function boot(){
   bindMapTap();
   setSheet(-1); $('#resultItems').innerHTML = EMPTY_RESULTS;
   applyPrefsVisual(); renderSaved(); renderPins(); drawManage();
+  startAtMyLocation();
   startAuth();
 }
 
@@ -1582,7 +1658,7 @@ async function handleSession(session){
   subscribe();
   await migrateLegacy();
   handling = null;
-  if (visiblePlaces().length) setTimeout(fitAll, 50);
+  geoStart.then(ok => { if (!ok && visiblePlaces().length) fitAll(); });
 }
 $('#btnLogin').onclick = async () => {
   const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
