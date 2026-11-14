@@ -1020,7 +1020,7 @@ function renderGas(){
   $('#resultItems').innerHTML = head + results.map((r, i) => `<div class="item" data-i="${i}">
       <div class="ic">⛽</div>
       <div class="body">
-        <div class="t"><span class="nm">${esc(r.name)}</span>${r.price === min ? '<span class="tag" style="background:var(--accent);color:#fff">최저가</span>' : ''}</div>
+        <div class="t"><span class="nm">${esc(r.name)}</span>${min != null && r.price === min ? '<span class="tag" style="background:var(--accent);color:#fff">최저가</span>' : ''}</div>
         <div class="s">${fmtDist(r.distance)}${r.brand ? ' · ' + esc(BRANDS[r.brand] || r.brand) : ''}${r.address ? ' · ' + esc(r.address) : ''}</div>
         <div class="tags"><a class="btn sm" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a></div>
       </div>
