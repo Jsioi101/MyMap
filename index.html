@@ -410,6 +410,7 @@ const DEFAULT_REGIONS = [
   {id:'gg-north', name:'경기북부', rules:{'경기':['고양시','남양주시','파주시','의정부시','양주시','구리시','포천시','동두천시','가평군','연천군']}},
   {id:'incheon', name:'인천', rules:{'인천':[]}}
 ];
+const gasRadius = () => Math.max(1000, Math.min(10000, +((prefs.gas && prefs.gas.radius) || 10000)));
 const FUELS = [{code:'B027',name:'휘발유'},{code:'D047',name:'경유'},{code:'B034',name:'고급휘발유'},{code:'K015',name:'LPG'}];
 const BRANDS = {SKE:'SK에너지',GSC:'GS칼텍스',HDO:'HD현대오일뱅크',SOL:'S-OIL',RTE:'알뜰주유소',RTX:'고속도로알뜰',NHO:'농협알뜰',ETC:'자가상표',E1G:'E1',SKG:'SK가스'};
 const MAP_PRESETS = [
@@ -423,7 +424,7 @@ const DEFAULT_PREFS = () => ({
   filter:{region:'', cats:[], visited:'all', minRating:0, tags:[]},
   mapStyle:{sat:100,bri:100,con:100,warm:0},
   pin:{size:100, opacity:100, labels:true},
-  gas:{prodcd:'B027'},
+  gas:{prodcd:'B027', radius:10000},
   sort:'region', nearOnly:false,
   mapType:'ROADMAP', layers:{TERRAIN:false, TRAFFIC:false, BICYCLE:false, USE_DISTRICT:false}
 });
@@ -1123,22 +1124,22 @@ $('#btnGas').onclick = async () => {
   let pos = await getPosition(), fromGps = !!pos;
   if (!pos) { const c = map.getCenter(); pos = { lat:c.getLat(), lng:c.getLng() }; }
   showMe(pos);
-  $('#resultItems').innerHTML = `<div class="empty">반경 10km 주유소 가격 확인 중…</div>`;
+  $('#resultItems').innerHTML = `<div class="empty">반경 ${gasRadius()/1000}km 주유소 가격 확인 중…</div>`;
   gasInfo = { origin:pos, fromGps, priced:false, error:'' };
   let list = null;
   try {
-    const data = await invokeFn(FN_GAS, { lat:pos.lat, lng:pos.lng, radius:10000, prodcd:prefs.gas.prodcd });
+    const data = await invokeFn(FN_GAS, { lat:pos.lat, lng:pos.lng, radius:gasRadius(), prodcd:prefs.gas.prodcd });
     if (data && Array.isArray(data.stations)) { list = data.stations; gasInfo.priced = true; }
   } catch (err) { gasInfo.error = (err && err.message) || String(err); }
   if (!list) list = await kakaoGas(pos);
-  results = list.map(s => ({ ...s, distance: s.distance ?? haversine(pos, s) })).filter(s => s.distance <= 10000);
+  results = list.map(s => ({ ...s, distance: s.distance ?? haversine(pos, s) })).filter(s => s.distance <= gasRadius());
   results.sort((a, b) => gasInfo.priced ? (a.price - b.price) || (a.distance - b.distance) : a.distance - b.distance);
   renderGas(); drawGasPins(); updateClear();
 };
 async function kakaoGas(pos){
   const center = new kakao.maps.LatLng(pos.lat, pos.lng), out = [];
   for (let page = 1; page <= 3; page++) {
-    const data = await new Promise(res => ps.categorySearch('OL7', (d, st, pg) => res(st === kakao.maps.services.Status.OK ? { d, pg } : null), { location:center, radius:10000, sort:kakao.maps.services.SortBy.DISTANCE, page }));
+    const data = await new Promise(res => ps.categorySearch('OL7', (d, st, pg) => res(st === kakao.maps.services.Status.OK ? { d, pg } : null), { location:center, radius:gasRadius(), sort:kakao.maps.services.SortBy.DISTANCE, page }));
     if (!data) break;
     data.d.forEach(d => out.push({ id:d.id, name:d.place_name, brand:'', price:null, lat:+d.y, lng:+d.x, distance:+d.distance, address:d.road_address_name || d.address_name, phone:d.phone, placeUrl:d.place_url, kakaoId:d.id, kakaoCategory:d.category_name }));
     if (!data.pg.hasNextPage) break;
@@ -1147,7 +1148,8 @@ async function kakaoGas(pos){
 }
 function renderGas(){
   const fuel = FUELS.find(f => f.code === prefs.gas.prodcd) || FUELS[0];
-  const head = `<div class="resHead"><span>⛽ 반경 10km · ${esc(fuel.name)} · ${gasInfo.priced ? '가격 낮은 순' : '가까운 순'} (${results.length})</span><select class="btn sm" id="fuelSel">${FUELS.map(f => `<option value="${f.code}" ${f.code === fuel.code ? 'selected' : ''}>${f.name}</option>`).join('')}</select></div>`
+  const rOpts = [1,2,3,5,7,10].map(k => `<option value="${k*1000}" ${gasRadius() === k*1000 ? 'selected' : ''}>${k}km</option>`).join('');
+  const head = `<div class="resHead"><span>⛽ ${esc(fuel.name)} · ${gasInfo.priced ? '가격 낮은 순' : '가까운 순'} (${results.length})</span><span style="display:flex;gap:4px"><select class="btn sm" id="radSel">${[...new Set([...[1,2,3,5,7,10].map(k=>k*1000), gasRadius()])].sort((a,b)=>a-b).map(v => `<option value="${v}" ${gasRadius() === v ? 'selected' : ''}>${(v/1000).toFixed(v % 1000 ? 1 : 0)}km</option>`).join('')}</select><select class="btn sm" id="fuelSel">${FUELS.map(f => `<option value="${f.code}" ${f.code === fuel.code ? 'selected' : ''}>${f.name}</option>`).join('')}</select></span></div>`
     + (gasInfo.fromGps ? '' : `<div class="note">현재 위치를 쓸 수 없어 지도 가운데를 기준으로 찾았어요.</div>`)
     + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 옵션 › 주유소를 참고하세요.${gasInfo.error ? `<br><b style="font-size:12px;color:var(--danger)">오류: ${esc(gasInfo.error.slice(0,200))}</b>` : ''}</div>`);
   if (!results.length) { $('#resultItems').innerHTML = head + `<div class="empty">10km 안에 주유소를 찾지 못했어요.</div>`; bindFuel(); return; }
@@ -1156,10 +1158,10 @@ function renderGas(){
       <div class="ic">⛽</div>
       <div class="body">
         <div class="t"><span class="nm">${esc(r.name)}</span>${min != null && r.price === min ? '<span class="tag" style="background:var(--accent);color:#fff">최저가</span>' : ''}</div>
+        ${r.price != null ? `<div style="font-weight:800;font-size:16px;color:var(--accent);margin-top:2px">${Number(r.price).toLocaleString()}원<span style="font-size:12px;color:var(--muted);font-weight:500"> /L</span></div>` : ''}
         <div class="s">${fmtDist(r.distance)}${r.brand ? ' · ' + esc(BRANDS[r.brand] || r.brand) : ''}${r.address ? ' · ' + esc(r.address) : ''}</div>
         <div class="tags"><a class="btn sm" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a></div>
       </div>
-      ${r.price != null ? `<div class="price">${Number(r.price).toLocaleString()}<small>원/L</small></div>` : ''}
     </div>`).join('');
   bindFuel();
   $('#resultItems').querySelectorAll('.item').forEach(el => el.onclick = e => {
@@ -1168,7 +1170,10 @@ function renderGas(){
     document.querySelectorAll('#resultItems .item').forEach(x => x.classList.toggle('sel', x === el));
   });
 }
-function bindFuel(){ const s = $('#fuelSel'); if (s) s.onchange = () => { prefs.gas.prodcd = s.value; saveSettings(); drawManage(); $('#btnGas').click(); }; }
+function bindFuel(){
+  const s = $('#fuelSel'); if (s) s.onchange = () => { prefs.gas.prodcd = s.value; saveSettings(); drawManage(); $('#btnGas').click(); };
+  const r = $('#radSel'); if (r) r.onchange = () => { prefs.gas.radius = +r.value; saveSettings(); drawManage(); $('#btnGas').click(); };
+}
 function drawGasPins(){
   clearGas();
   const min = gasInfo.priced && results.length ? Math.min(...results.map(r => r.price)) : null;
@@ -1309,7 +1314,8 @@ function drawManage(){
   });
   $('#fuelPick').innerHTML = FUELS.map(f => `<button class="chip ${prefs.gas.prodcd === f.code ? 'on' : ''}" data-v="${f.code}">${f.name}</button>`).join('');
   $('#fuelPick').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.gas.prodcd = b.dataset.v; saveSettings(); drawManage(); });
-  $('#gasStatus').innerHTML = '⛽ 주유소 버튼은 현재 위치에서 반경 10km 안의 주유소를 보여줘요. 가격은 오피넷(한국석유공사) 연결이 필요하고, 연결 전에는 가까운 순으로 나와요.';
+  $('#gasStatus').innerHTML = `<div class="slider"><span>찾을 반경</span><input type="range" min="1" max="10" step="1" value="${gasRadius()/1000}" id="gasRad"><b>${gasRadius()/1000}km</b></div>⛽ 주유소 버튼은 현재 위치에서 이 반경 안의 주유소를 가격 낮은 순으로 보여줘요.`;
+  $('#gasRad').oninput = e => { prefs.gas.radius = +e.target.value * 1000; e.target.nextElementSibling.textContent = e.target.value + 'km'; saveSettings(); };
 }
 $('#btnCatAdd').onclick = () => {
   let n = '새 카테고리', k = 2; while (cats.some(c => c.name === n)) n = '새 카테고리 ' + k++;
