@@ -364,6 +364,9 @@ button{cursor:pointer}
 const KAKAO_JS_KEY = 'e60eb50f537c816d586161e540fa6cea';
 const SB_URL = 'https://llplznxiejjbczhqfwey.supabase.co';
 const SB_KEY = 'sb_publishable_Qf-bDwGVwsBmogHBZrUVwQ_N84c1xFm';
+// Supabase Edge Function 주소(슬러그). 대시보드 이름과 다를 수 있으니 함수 URL 끝부분을 넣는다.
+const FN_GAS = 'rapid-endpoint';      // 오피넷 주유소 가격 (opinet-around)
+const FN_REVIEWS = 'naver-reviews';   // 네이버 블로그 리뷰
 const LEGACY_STORE = 'mymap.places.v1';
 const LEGACY_CATS = 'mymap.cats.v1';
 
@@ -907,7 +910,7 @@ async function invokeFn(name, body){
   if (error) {
     let msg = error.message || String(error);
     try { const j = await error.context.json(); if (j && (j.error || j.message || j.msg)) msg = j.error || j.message || j.msg; } catch(_){}
-    if ((error.context && error.context.status === 404) || /Failed to send/i.test(msg)) msg = `Supabase에 '${name}' 함수가 없어요. Edge Functions 목록에서 이름이 정확히 ${name} 인지 확인해 주세요.`;
+    if ((error.context && error.context.status === 404) || /Failed to send/i.test(msg)) msg = `Supabase에 '${name}' 주소의 함수가 없어요. Edge Functions 목록의 URL 끝부분을 확인해 주세요.`;
     throw new Error(msg);
   }
   if (data && data.error) throw new Error(data.error);
@@ -1026,7 +1029,7 @@ async function loadReviews(p, box){
     </div>`;
   box.innerHTML = `<h3>네이버 리뷰</h3><p class="meta">불러오는 중…</p>`;
   const key = (p.kakaoId || '') + '|' + q;
-  if (!reviewCache[key]) reviewCache[key] = invokeFn('naver-reviews', { name: p.name, area });
+  if (!reviewCache[key]) reviewCache[key] = invokeFn(FN_REVIEWS, { name: p.name, area });
   try {
     const d = await reviewCache[key];
     if (!box.isConnected) return;
@@ -1124,7 +1127,7 @@ $('#btnGas').onclick = async () => {
   gasInfo = { origin:pos, fromGps, priced:false, error:'' };
   let list = null;
   try {
-    const data = await invokeFn('opinet-around', { lat:pos.lat, lng:pos.lng, radius:10000, prodcd:prefs.gas.prodcd });
+    const data = await invokeFn(FN_GAS, { lat:pos.lat, lng:pos.lng, radius:10000, prodcd:prefs.gas.prodcd });
     if (data && Array.isArray(data.stations)) { list = data.stations; gasInfo.priced = true; }
   } catch (err) { gasInfo.error = (err && err.message) || String(err); }
   if (!list) list = await kakaoGas(pos);
