@@ -103,6 +103,23 @@ button{cursor:pointer}
 .field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;background:#fff}
 .field textarea{min-height:76px;resize:vertical}
+.opt details{border-top:1px solid var(--line)}
+.opt details summary{list-style:none;cursor:pointer;padding:14px 2px;font-weight:700;font-size:15.5px;display:flex;justify-content:space-between;align-items:center}
+.opt details summary::-webkit-details-marker{display:none}
+.opt details summary:after{content:"›";transform:rotate(90deg);color:var(--muted);font-size:20px;transition:transform .15s}
+.opt details[open] summary:after{transform:rotate(-90deg)}
+.opt .dbody{padding:0 2px 14px}
+.opt .dbody h4:first-child{margin-top:0}
+.opt .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.opt .meta{color:var(--muted);font-size:13.5px;line-height:1.6}
+.lrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--soft);font-size:14.5px}
+.lrow small{display:block;color:var(--muted);font-size:12px}
+.sw{position:relative;width:46px;height:28px;flex:none}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:#d1d5db;border-radius:999px;transition:.15s}
+.sw span:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw input:checked+span{background:var(--accent)}
+.sw input:checked+span:before{transform:translateX(18px)}
 .dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;position:sticky;bottom:calc(-16px - var(--safe-b));background:#fff;padding:10px 0 4px}
 .wrap{display:flex;gap:6px;flex-wrap:wrap}
 .wrap .chip{font-size:14px;padding:6px 12px}
@@ -186,7 +203,6 @@ button{cursor:pointer}
     <div class="tabs">
       <button class="tab on" data-tab="saved">즐겨찾기 <span id="cnt"></span></button>
       <button class="tab" data-tab="results">검색 결과</button>
-      <button class="tab" data-tab="more">설정</button>
     </div>
   </div>
 
@@ -213,39 +229,6 @@ button{cursor:pointer}
     <div id="resultItems"><div class="empty">매장명이나 주소를 검색하거나,<br>지도에서 가게 이름을 눌러 보세요.</div></div>
   </div>
 
-  <div class="panel" id="p-more" hidden>
-    <div class="detail">
-      <h3 style="margin-top:8px">계정</h3>
-      <p class="meta" id="acct"></p>
-      <div class="acts"><button class="btn" id="btnLogout">로그아웃</button></div>
-
-      <h3>카테고리 관리</h3>
-      <p class="meta">이모지·이름·핀 색을 바꾸고 ↑↓로 순서를 정해요. 이름을 바꾸면 저장된 매장에도 반영돼요.</p>
-      <div id="catManage"></div>
-      <div class="acts"><button class="btn" id="btnCatAdd">+ 카테고리 추가</button></div>
-
-      <h3>지역 관리</h3>
-      <p class="meta">시·도와 시·군·구를 묶어 지역을 만들어요. 즐겨찾기 위쪽 지역 버튼으로 그 지역만 볼 수 있어요.</p>
-      <div id="regionManage"></div>
-      <div class="acts"><button class="btn" id="btnRegionAdd">+ 지역 추가</button></div>
-
-      <h3>주유소</h3>
-      <div class="wrap" id="fuelPick"></div>
-      <p class="meta" id="gasStatus" style="margin-top:8px"></p>
-
-      <h3>백업</h3>
-      <p class="meta">즐겨찾기와 설정은 구글 계정에 저장되고 모든 기기에서 자동으로 맞춰져요. 따로 보관하고 싶을 때 파일로 내보내세요.</p>
-      <div class="acts">
-        <button class="btn" id="btnExport">JSON 내보내기</button>
-        <button class="btn" id="btnCsv">CSV 내보내기</button>
-        <button class="btn" id="btnImport">가져오기</button>
-        <input type="file" id="importFile" accept=".json,application/json" hidden>
-      </div>
-      <h3>홈 화면에 추가</h3>
-      <p class="meta">안드로이드: 브라우저 메뉴 → <b>홈 화면에 추가</b><br>아이폰(사파리): 공유 버튼 → <b>홈 화면에 추가</b></p>
-      <div class="acts"><button class="btn danger" id="btnWipe">모든 즐겨찾기 지우기</button></div>
-    </div>
-  </div>
 </section>
 
 <!-- 저장/수정 -->
@@ -271,23 +254,64 @@ button{cursor:pointer}
 
 <!-- 옵션 -->
 <div class="modal" id="optModal" hidden>
-  <div class="dialog">
+  <div class="dialog opt">
     <h3>옵션</h3>
-    <h4>지역</h4><div class="wrap" id="oRegion"></div>
-    <h4>카테고리 <span class="meta" style="font-weight:400">(선택 안 하면 전체)</span></h4><div class="wrap" id="oCats"></div>
-    <h4>방문</h4><div class="wrap" id="oVisited"></div>
-    <h4>최소 별점</h4><div class="wrap" id="oRating"></div>
-    <h4>태그</h4><div class="wrap" id="oTags"></div>
-    <h4>지도 색감</h4>
-    <div class="wrap" id="oPreset"></div>
-    <div id="oSliders"></div>
-    <h4>아이콘</h4>
-    <div class="wrap" id="oPinSize"></div>
-    <div id="oPinSliders"></div>
-    <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="oLabels"> 핀 아래 이름 표시</label>
-    <div id="oCatColors"></div>
+    <details open><summary>필터</summary><div class="dbody">
+      <h4>지역</h4><div class="wrap" id="oRegion"></div>
+      <h4>카테고리 <span class="meta" style="font-weight:400">(선택 안 하면 전체)</span></h4><div class="wrap" id="oCats"></div>
+      <h4>방문</h4><div class="wrap" id="oVisited"></div>
+      <h4>최소 별점</h4><div class="wrap" id="oRating"></div>
+      <h4>태그</h4><div class="wrap" id="oTags"></div>
+      <div class="acts" style="margin-top:12px"><button class="btn" id="optReset">필터 초기화</button></div>
+    </div></details>
+    <details><summary>지도 세부</summary><div class="dbody">
+      <h4>지도 종류</h4><div class="wrap" id="oMapType"></div>
+      <h4>지도 위에 겹쳐 보기</h4><div id="oLayers"></div>
+      <p class="meta" style="font-size:12.5px;margin:8px 0 0">카카오 지도 바탕에 그려진 아파트·관공서·공원 같은 아이콘과 이름은 지도 그림 자체에 들어 있어서 종류별로 끌 수 없어요. 확대·축소에 따라 보였다 사라지는 것도 카카오가 정한 규칙이에요. 대신 아래 색감에서 바탕을 흐리게 하면 내 핀이 더 잘 보여요.</p>
+      <h4>지도 색감</h4>
+      <div class="wrap" id="oPreset"></div>
+      <div id="oSliders"></div>
+    </div></details>
+    <details><summary>아이콘 · 카테고리</summary><div class="dbody">
+      <div id="oPinSliders"></div>
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="oLabels"> 핀 아래 이름 표시</label>
+      <p class="meta">이모지·이름·핀 색을 바꾸고 ↑↓로 순서를 정해요. 이름을 바꾸면 저장된 매장에도 반영돼요.</p>
+      <div id="catManage"></div>
+      <div class="acts"><button class="btn" id="btnCatAdd">+ 카테고리 추가</button></div>
+
+      
+    </div></details>
+    <details><summary>지역 관리</summary><div class="dbody">
+      <p class="meta">시·도와 시·군·구를 묶어 지역을 만들어요. 즐겨찾기 위쪽 지역 버튼으로 그 지역만 볼 수 있어요.</p>
+      <div id="regionManage"></div>
+      <div class="acts"><button class="btn" id="btnRegionAdd">+ 지역 추가</button></div>
+
+      
+    </div></details>
+    <details><summary>주유소</summary><div class="dbody">
+      <div class="wrap" id="fuelPick"></div>
+      <p class="meta" id="gasStatus" style="margin-top:8px"></p>
+
+      
+    </div></details>
+    <details><summary>계정 · 백업</summary><div class="dbody">
+      <p class="meta" id="acct"></p>
+      <div class="acts"><button class="btn" id="btnLogout">로그아웃</button></div>
+
+      
+      <h4>백업</h4><p class="meta">즐겨찾기와 설정은 구글 계정에 저장되고 모든 기기에서 자동으로 맞춰져요. 따로 보관하고 싶을 때 파일로 내보내세요.</p>
+      <div class="acts">
+        <button class="btn" id="btnExport">JSON 내보내기</button>
+        <button class="btn" id="btnCsv">CSV 내보내기</button>
+        <button class="btn" id="btnImport">가져오기</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+      <h4>홈 화면에 추가</h4>
+      <p class="meta">안드로이드: 브라우저 메뉴 → <b>홈 화면에 추가</b><br>아이폰(사파리): 공유 버튼 → <b>홈 화면에 추가</b></p>
+      <div class="acts"><button class="btn danger" id="btnWipe">모든 즐겨찾기 지우기</button></div>
+    
+    </div></details>
     <div class="dlg-acts">
-      <button class="btn" id="optReset">필터 초기화</button>
       <button class="btn pri" id="optClose">닫기</button>
     </div>
   </div>
@@ -385,7 +409,8 @@ const DEFAULT_PREFS = () => ({
   mapStyle:{sat:100,bri:100,con:100,warm:0},
   pin:{size:100, opacity:100, labels:true},
   gas:{prodcd:'B027'},
-  sort:'region', nearOnly:false
+  sort:'region', nearOnly:false,
+  mapType:'ROADMAP', layers:{TERRAIN:false, TRAFFIC:false, BICYCLE:false, USE_DISTRICT:false}
 });
 
 const $ = s => document.querySelector(s);
@@ -629,7 +654,7 @@ window.addEventListener('resize', () => setSheet(sheetIdx));
 })();
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
-  ['saved','results','more'].forEach(n => $('#p-' + n).hidden = n !== name);
+  ['saved','results'].forEach(n => $('#p-' + n).hidden = n !== name);
   if (sheetIdx === 0) setSheet(1);
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => { showTab(t.dataset.tab); if (t.dataset.tab === 'saved') closeDetail(); });
@@ -662,7 +687,27 @@ function fitAll(){
   list.forEach(p => b.extend(new kakao.maps.LatLng(p.lat, p.lng)));
   map.setBounds(b, 120, 40, Math.round(sheetPx()) + 20, 40);
 }
+const MAP_TYPES = [{v:'ROADMAP',label:'일반 지도'},{v:'SKYVIEW',label:'스카이뷰'},{v:'HYBRID',label:'스카이뷰 + 이름'}];
+const LAYERS = [{v:'TERRAIN',label:'지형',sub:'산·언덕 높낮이'},{v:'TRAFFIC',label:'실시간 교통',sub:'도로 막힘 정도'},{v:'BICYCLE',label:'자전거 도로',sub:'자전거길 표시'},{v:'USE_DISTRICT',label:'지적편집도',sub:'용도지역 색 구분'}];
+let appliedLayers = new Set(), appliedType = 'ROADMAP';
+function applyMapLayers(){
+  if (!map) return;
+  const t = prefs.mapType || 'ROADMAP';
+  if (t !== appliedType) { map.setMapTypeId(kakao.maps.MapTypeId[t]); appliedType = t; }
+  LAYERS.forEach(l => {
+    const on = !!(prefs.layers && prefs.layers[l.v]);
+    if (on && !appliedLayers.has(l.v)) { map.addOverlayMapTypeId(kakao.maps.MapTypeId[l.v]); appliedLayers.add(l.v); }
+    if (!on && appliedLayers.has(l.v)) { map.removeOverlayMapTypeId(kakao.maps.MapTypeId[l.v]); appliedLayers.delete(l.v); }
+  });
+}
+function drawLayers(){
+  $('#oMapType').innerHTML = MAP_TYPES.map(m => `<button type="button" class="chip ${(prefs.mapType || 'ROADMAP') === m.v ? 'on' : ''}" data-v="${m.v}">${m.label}</button>`).join('');
+  $('#oMapType').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.mapType = b.dataset.v; applyMapLayers(); saveSettings(); drawLayers(); });
+  $('#oLayers').innerHTML = LAYERS.map(l => `<div class="lrow"><div>${l.label}<small>${l.sub}</small></div><label class="sw"><input type="checkbox" data-v="${l.v}" ${prefs.layers && prefs.layers[l.v] ? 'checked' : ''}><span></span></label></div>`).join('');
+  $('#oLayers').querySelectorAll('input').forEach(inp => inp.onchange = () => { prefs.layers = { ...(prefs.layers || {}), [inp.dataset.v]: inp.checked }; applyMapLayers(); saveSettings(); });
+}
 function applyPrefsVisual(){
+  applyMapLayers();
   const m = prefs.mapStyle;
   const f = `saturate(${m.sat}%) brightness(${m.bri}%) contrast(${m.con}%)` + (m.warm ? ` sepia(${m.warm}%)` : '');
   document.documentElement.style.setProperty('--map-filter', (m.sat === 100 && m.bri === 100 && m.con === 100 && !m.warm) ? 'none' : f);
@@ -1015,7 +1060,7 @@ function renderGas(){
   const fuel = FUELS.find(f => f.code === prefs.gas.prodcd) || FUELS[0];
   const head = `<div class="resHead"><span>⛽ 반경 10km · ${esc(fuel.name)} · ${gasInfo.priced ? '가격 낮은 순' : '가까운 순'} (${results.length})</span><select class="btn sm" id="fuelSel">${FUELS.map(f => `<option value="${f.code}" ${f.code === fuel.code ? 'selected' : ''}>${f.name}</option>`).join('')}</select></div>`
     + (gasInfo.fromGps ? '' : `<div class="note">현재 위치를 쓸 수 없어 지도 가운데를 기준으로 찾았어요.</div>`)
-    + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 설정 › 주유소 안내를 참고하세요.${gasInfo.error ? `<br><span style="font-size:11.5px">(${esc(gasInfo.error.slice(0,120))})</span>` : ''}</div>`);
+    + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 옵션 › 주유소를 참고하세요.${gasInfo.error ? `<br><span style="font-size:11.5px">(${esc(gasInfo.error.slice(0,120))})</span>` : ''}</div>`);
   if (!results.length) { $('#resultItems').innerHTML = head + `<div class="empty">10km 안에 주유소를 찾지 못했어요.</div>`; bindFuel(); return; }
   const min = gasInfo.priced ? Math.min(...results.map(r => r.price)) : null;
   $('#resultItems').innerHTML = head + results.map((r, i) => `<div class="item" data-i="${i}">
@@ -1098,7 +1143,6 @@ function drawOptions(){
     prefs.mapStyle[inp.dataset.k] = +inp.value; inp.nextElementSibling.textContent = inp.value + '%'; applyPrefsVisual(); saveSettings();
     $('#oPreset').querySelectorAll('.chip').forEach((b, i) => b.classList.toggle('on', JSON.stringify(MAP_PRESETS[i].v) === JSON.stringify(prefs.mapStyle)));
   });
-  $('#oPinSize').innerHTML = '';
   $('#oPinSliders').innerHTML = slidersHTML([
     {k:'size', label:'핀 크기', min:60, max:150, step:5, value:prefs.pin.size, unit:'%'},
     {k:'opacity', label:'핀 진하기', min:30, max:100, step:5, value:prefs.pin.opacity, unit:'%'}
@@ -1106,9 +1150,8 @@ function drawOptions(){
   $('#oPinSliders').querySelectorAll('input').forEach(inp => inp.oninput = () => { prefs.pin[inp.dataset.k] = +inp.value; inp.nextElementSibling.textContent = inp.value + '%'; applyPrefsVisual(); saveSettings(); });
   $('#oLabels').checked = !!prefs.pin.labels;
   $('#oLabels').onchange = () => { prefs.pin.labels = $('#oLabels').checked; applyPrefsVisual(); saveSettings(); };
-  $('#oCatColors').innerHTML = '<div class="meta" style="margin:6px 0">카테고리별 아이콘 색</div>' + cats.map((c, i) => `<div class="mrow"><span style="width:28px;text-align:center">${esc(c.emoji)}</span><span class="grow">${esc(c.name)}</span><input type="color" value="${esc(c.color)}" data-i="${i}"></div>`).join('');
-  $('#oCatColors').querySelectorAll('input[type=color]').forEach(inp => inp.oninput = () => { cats[+inp.dataset.i].color = inp.value; saveSettings(); renderPins(); });
-  $('#oCatColors').querySelectorAll('input[type=color]').forEach(inp => inp.onchange = () => { renderSaved(); drawManage(); });
+  drawLayers();
+  drawManage();
 }
 $('#btnOptions').onclick = () => { drawOptions(); $('#optModal').hidden = false; };
 $('#optClose').onclick = () => { $('#optModal').hidden = true; };
