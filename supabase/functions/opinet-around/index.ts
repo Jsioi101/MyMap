@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 type Oil = {
-  UNI_ID: string; POLL_DIV_CD?: string; OS_NM: string; PRICE: number | string;
+  UNI_ID: string; POLL_DIV_CD?: string; POLL_DIV_CO?: string; OS_NM: string; PRICE: number | string;
   GIS_X_COOR: number | string; GIS_Y_COOR: number | string;
 };
 
@@ -51,11 +51,22 @@ Deno.serve(async (req) => {
         certkey: key, code: key, out: "json", x: x.toFixed(1), y: y.toFixed(1),
         radius: String(Math.min(R, radius)), sort: "1", prodcd,
       }).toString();
-      const r = await fetch(u);
-      if (!r.ok) throw new Error(`오피넷 응답 오류 ${r.status}`);
-      const text = await r.text();
+      let text = "";
+      try {
+        const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) throw new Error(`오피넷 응답 오류 ${r.status}`);
+        text = await r.text();
+      } catch (e) {
+        // 공공기관 서버 인증서 문제로 https 가 실패하면 http 로 다시 시도한다.
+        u.protocol = "http:";
+        const r = await fetch(u, { signal: AbortSignal.timeout(8000) }).catch((e2) => {
+          throw new Error(`오피넷 연결 실패: ${e instanceof Error ? e.message : e} / ${e2 instanceof Error ? e2.message : e2}`);
+        });
+        if (!r.ok) throw new Error(`오피넷 응답 오류 ${r.status}`);
+        text = await r.text();
+      }
       let data: { RESULT?: { OIL?: Oil[] } };
-      try { data = JSON.parse(text); } catch { throw new Error("오피넷 응답을 읽지 못했어요 (인증키를 확인해 주세요)"); }
+      try { data = JSON.parse(text); } catch { throw new Error("오피넷 응답을 읽지 못했어요 (인증키를 확인해 주세요): " + text.slice(0, 120)); }
       return data?.RESULT?.OIL ?? [];
     };
 
@@ -69,7 +80,7 @@ Deno.serve(async (req) => {
       return {
         id: o.UNI_ID,
         name: o.OS_NM,
-        brand: o.POLL_DIV_CD ?? "",
+        brand: o.POLL_DIV_CD ?? o.POLL_DIV_CO ?? "",
         price: Number(o.PRICE),
         lat: slat,
         lng: slng,

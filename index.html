@@ -29,6 +29,15 @@ button{cursor:pointer}
 .searchbox{pointer-events:auto;display:flex;gap:6px;background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.15);padding:6px}
 .searchbox input{flex:1;border:0;outline:0;padding:8px 10px;font-size:16px;min-width:0;background:transparent}
 .searchbox button{border:0;background:var(--accent);color:#fff;border-radius:10px;padding:0 14px;font-weight:600}
+.searchbox .qclear{background:transparent;color:var(--muted);font-size:18px;padding:0 8px;font-weight:400}
+.rv{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--soft);text-decoration:none;color:inherit}
+.rv img,.rv .noimg{width:76px;height:76px;flex:none;border-radius:10px;object-fit:cover;background:var(--soft);display:grid;place-items:center;color:var(--muted);font-size:22px}
+.rv b{display:block;font-size:14.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rv small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.rv p{margin:3px 0 0;font-size:12.5px;color:#4b5563;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.photos{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.photos img{width:104px;height:104px;object-fit:cover;border-radius:10px;flex:none;background:var(--soft)}
 .quick{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none;pointer-events:auto;padding-bottom:4px}
 .quick::-webkit-scrollbar{display:none}
 .qbtn{flex:none;border:0;background:rgba(255,255,255,.97);border-radius:999px;padding:7px 12px;font-size:13.5px;font-weight:600;box-shadow:0 1px 6px rgba(0,0,0,.14);display:flex;align-items:center;gap:5px;white-space:nowrap}
@@ -142,8 +151,10 @@ button{cursor:pointer}
 .nolabels .pin .l{display:none}
 .pin.sel{z-index:5;opacity:1}
 .pin.sel .b{width:40px;height:40px;border-width:3px}
-.gaspin{transform:translate(-50%,-100%);background:#fff;border:2px solid var(--accent);border-radius:8px;padding:1px 6px;font-size:12px;font-weight:800;color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.25);white-space:nowrap;cursor:pointer}
+.gaspin{transform:translate(-50%,-100%);background:#fff;border:2px solid var(--accent);border-radius:8px;padding:2px 7px;font-size:11px;color:var(--fg);box-shadow:0 1px 5px rgba(0,0,0,.25);white-space:nowrap;cursor:pointer;text-align:center;line-height:1.25}
+.gaspin b{display:block;font-size:13px;color:var(--accent)}
 .gaspin.best{background:var(--accent);color:#fff}
+.gaspin.best b{color:#fff}
 .me{width:16px;height:16px;border-radius:50%;background:#1c7ed6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(28,126,214,.25);transform:translate(-50%,-50%)}
 .pop{transform:translate(-50%,calc(-100% - 14px));background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.25);padding:12px 12px 10px;width:260px;font-size:14px;cursor:default}
 .pop:after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#fff}
@@ -183,6 +194,7 @@ button{cursor:pointer}
 <div class="topbar">
   <form class="searchbox" id="searchForm" autocomplete="off">
     <input id="q" type="search" placeholder="매장명이나 주소 검색" enterkeyhint="search">
+    <button type="button" class="qclear" id="qClear" hidden aria-label="검색 초기화">✕</button>
     <button type="submit">검색</button>
   </form>
   <div class="quick">
@@ -226,7 +238,7 @@ button{cursor:pointer}
   </div>
 
   <div class="panel" id="p-results" hidden>
-    <div id="resultItems"><div class="empty">매장명이나 주소를 검색하거나,<br>지도에서 가게 이름을 눌러 보세요.</div></div>
+    <div id="resultItems"></div>
   </div>
 
 </section>
@@ -810,7 +822,8 @@ function openDetail(id, move){
       <button class="btn" id="dEdit">수정</button>
       <button class="btn danger" id="dDel">삭제</button>
     </div>
-    <div class="meta" style="margin-top:12px;font-size:12px">저장: ${new Date(p.createdAt).toLocaleDateString('ko-KR')}</div>`;
+    <div class="meta" style="margin-top:12px;font-size:12px">저장: ${new Date(p.createdAt).toLocaleDateString('ko-KR')}</div>
+    <div id="dReviews"></div>`;
   $('#dBack').onclick = closeDetail;
   $('#dEdit').onclick = () => openEdit(p);
   $('#dDel').onclick = async () => {
@@ -822,6 +835,7 @@ function openDetail(id, move){
   renderPins();
   if (move !== false) focusOn(p.lat, p.lng, Math.min(map.getLevel(), 4));
   $('#p-saved').scrollTop = 0;
+  if (user) loadReviews(p, $('#dReviews'));
 }
 function closeDetail(){
   selectedId = null; $('#detail').hidden = true; $('#savedList').hidden = false;
@@ -887,7 +901,29 @@ $('#editForm').onsubmit = async e => {
   if (await savePlace(target)) toast(p.id ? '수정했어요' : '즐겨찾기에 저장했어요');
 };
 
+/* ---------- edge function helper ---------- */
+async function invokeFn(name, body){
+  const { data, error } = await sb.functions.invoke(name, { body });
+  if (error) {
+    let msg = error.message || String(error);
+    try { const j = await error.context.json(); if (j && (j.error || j.message || j.msg)) msg = j.error || j.message || j.msg; } catch(_){}
+    if (error.context && error.context.status === 404) msg = '서버 기능(' + name + ')이 아직 배포되지 않았어요';
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
 /* ---------- search & nearby ---------- */
+const EMPTY_RESULTS = `<div class="empty">매장명이나 주소를 검색하거나,<br>지도에서 가게 아이콘을 눌러 보세요.</div>`;
+let placeView = null;
+function updateClear(){ $('#qClear').hidden = !($('#q').value || results.length || gasOverlays.length || placeView || tempMarker); }
+$('#q').addEventListener('input', updateClear);
+$('#qClear').onclick = () => {
+  $('#q').value = ''; results = []; lastPagination = null; resultsMode = 'search'; placeView = null;
+  clearTemp(); clearGas(); closePop();
+  $('#resultItems').innerHTML = EMPTY_RESULTS; showTab('saved'); closeDetail(); updateClear();
+};
 let results = [], lastPagination = null, resultsMode = 'search', resultsTitle = '';
 function fromKakao(d){ return {kakaoId:d.id, name:d.place_name, address:d.address_name, roadAddress:d.road_address_name, phone:d.phone, lat:+d.y, lng:+d.x, placeUrl:d.place_url, kakaoCategory:d.category_name, groupCode:d.category_group_code, distance: d.distance ? +d.distance : null}; }
 function fromAddr(r){ return {kakaoId:null, name:(r.road_address && r.road_address.building_name) || r.address_name, address:(r.address && r.address.address_name) || r.address_name, roadAddress:(r.road_address && r.road_address.address_name) || '', phone:'', lat:+r.y, lng:+r.x, placeUrl:'', kakaoCategory:''}; }
@@ -897,7 +933,7 @@ function startSave(r){ const s = isSaved(r); if (s) { closePop(); openDetail(s.i
 $('#searchForm').onsubmit = e => {
   e.preventDefault();
   const q = $('#q').value.trim(); if (!q) return;
-  $('#q').blur(); closePop(); clearGas();
+  $('#q').blur(); closePop(); clearGas(); placeView = null;
   results = []; lastPagination = null; resultsMode = 'search'; resultsTitle = `'${q}' 검색 결과`;
   $('#resultItems').innerHTML = `<div class="empty">검색 중…</div>`;
   showTab('results');
@@ -924,7 +960,9 @@ function fitResults(){
 }
 function fmtDist(m){ return m == null ? '' : m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`; }
 function renderResults(){
-  if (!results.length) return;
+  if (placeView) return;
+  if (!results.length) { if (!$('#resultItems').innerHTML.trim()) $('#resultItems').innerHTML = EMPTY_RESULTS; return; }
+  updateClear();
   if (resultsMode === 'gas') return renderGas();
   $('#resultItems').innerHTML = `<div class="resHead"><span>${esc(resultsTitle)}</span></div>` + results.map((r, i) => {
     const s = isSaved(r);
@@ -950,7 +988,62 @@ function pickResult(i){
   tempMarker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(r.lat, r.lng), map });
   focusOn(r.lat, r.lng, Math.min(map.getLevel(), 4));
   showPop(r, null);
-  document.querySelectorAll('#resultItems .item').forEach(el => el.classList.toggle('sel', +el.dataset.i === i));
+  if (r.kakaoId) openPlaceInfo(r);
+  updateClear();
+}
+
+/* ---------- 장소 정보 + 네이버 리뷰 ---------- */
+const reviewCache = {};
+function openPlaceInfo(r){
+  placeView = r; showTab('results'); if (sheetIdx < 1) setSheet(1);
+  const s = isSaved(r), area = addrParts(r).sgg || addrParts(r).sido;
+  $('#resultItems').innerHTML = `<div class="detail">
+    ${results.length ? '<button class="back" id="pvBack">‹ 목록으로</button>' : ''}
+    <h2>${esc(r.name)}</h2>
+    <div class="meta">${esc((r.kakaoCategory || '').split(' > ').slice(-2).join(' > '))}${r.phone ? ' · ' + esc(r.phone) : ''}</div>
+    <div class="meta">${esc(r.roadAddress || r.address || '')}</div>
+    <div class="acts">
+      <button class="btn ${s ? '' : 'pri'}" id="pvSave">${s ? '저장됨 · 보기' : '★ 저장'}</button>
+      ${r.placeUrl ? `<a class="btn" href="${esc(r.placeUrl)}" target="_blank" rel="noopener">카카오 상세</a>` : ''}
+      <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a>
+      <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(area + ' ' + r.name)}" target="_blank" rel="noopener">네이버지도</a>
+    </div>
+    <div id="pvReviews"></div>
+  </div>`;
+  const back = $('#pvBack'); if (back) back.onclick = () => { placeView = null; renderResults(); };
+  $('#pvSave').onclick = () => startSave(r);
+  $('#p-results').scrollTop = 0;
+  loadReviews(r, $('#pvReviews'));
+  updateClear();
+}
+async function loadReviews(p, box){
+  if (!box) return;
+  const area = addrParts(p).sgg || addrParts(p).sido;
+  const q = `${area} ${p.name}`.trim();
+  const links = `<div class="acts">
+      <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(q)}" target="_blank" rel="noopener">네이버 지도 방문자 리뷰</a>
+      <a class="btn" href="https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(q)}" target="_blank" rel="noopener">블로그 더 보기</a>
+    </div>`;
+  box.innerHTML = `<h3>네이버 리뷰</h3><p class="meta">불러오는 중…</p>`;
+  const key = (p.kakaoId || '') + '|' + q;
+  if (!reviewCache[key]) reviewCache[key] = invokeFn('naver-reviews', { name: p.name, area });
+  try {
+    const d = await reviewCache[key];
+    if (!box.isConnected) return;
+    const imgs = (d.images || []).filter(x => x.thumb);
+    box.innerHTML = `<h3>네이버 블로그 리뷰</h3>
+      ${(d.blogs || []).length ? d.blogs.map(b => `<a class="rv" href="${esc(b.link)}" target="_blank" rel="noopener">
+          ${b.thumb ? `<img src="${esc(b.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="" onerror="this.outerHTML='<span class=noimg>📝</span>'">` : '<span class="noimg">📝</span>'}
+          <div><b>${esc(b.title)}</b><small>${esc(b.blogger)}${b.date ? ' · ' + esc(b.date) : ''}</small><p>${esc(b.desc)}</p></div>
+        </a>`).join('') : '<p class="meta">블로그 리뷰를 찾지 못했어요.</p>'}
+      ${imgs.length ? `<h3>사진</h3><div class="photos">${imgs.map(x => `<a href="https://search.naver.com/search.naver?where=image&query=${encodeURIComponent(q)}" target="_blank" rel="noopener"><img src="${esc(x.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt=""></a>`).join('')}</div>` : ''}
+      ${links}
+      <p class="meta" style="font-size:12px">네이버 지도 방문자 리뷰는 공개 API가 없어서 네이버 지도에서 바로 열어 드려요.</p>`;
+  } catch (e) {
+    delete reviewCache[key];
+    if (!box.isConnected) return;
+    box.innerHTML = `<h3>네이버 리뷰</h3><p class="meta">리뷰를 불러오지 못했어요. ${esc(e.message || e)}</p>${links}`;
+  }
 }
 
 /* 지도 탭 → 근처 장소 카드 */
@@ -977,8 +1070,8 @@ function showPop(r, others){
     const a = e.target.closest('[data-a]'); if (!a) return;
     if (a.dataset.a === 'x') closePop();
     else if (a.dataset.a === 'save') startSave(r);
-    else if (a.dataset.a === 'alt') { const o = others[+a.dataset.i]; showPop(o, [o, ...others.filter(x => x !== o)]); }
-    else if (a.dataset.a === 'others') { results = others; lastPagination = null; resultsMode = 'nearby'; resultsTitle = '누른 곳 근처'; clearGas(); renderResults(); showTab('results'); }
+    else if (a.dataset.a === 'alt') { const o = others[+a.dataset.i]; showPop(o, [o, ...others.filter(x => x !== o)]); openPlaceInfo(o); }
+    else if (a.dataset.a === 'others') { results = others; lastPagination = null; resultsMode = 'nearby'; resultsTitle = '누른 곳 근처'; placeView = null; clearGas(); renderResults(); showTab('results'); }
   });
   popOverlay = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(r.lat, r.lng), content: el, xAnchor: 0, yAnchor: 0, zIndex: 30, clickable: true });
   popOverlay.setMap(map);
@@ -996,22 +1089,17 @@ function keepPopVisible(r, el){
   if (dx || dy) map.panBy(Math.round(dx), Math.round(dy));
 }
 let nearSeq = 0;
-async function nearbyAt(latlng){
+async function nearbyAt(latlng, radius){
   const seq = ++nearSeq;
-  const lat = latlng.getLat(), lng = latlng.getLng();
-  showPop({ loading:true, lat, lng }, null);
-  const one = code => new Promise(res => ps.categorySearch(code, (data, st) => res(st === kakao.maps.services.Status.OK ? data : []), { location: latlng, radius: 45, sort: kakao.maps.services.SortBy.DISTANCE }));
-  const addr = new Promise(res => geocoder.coord2Address(lng, lat, (r, st) => res(st === kakao.maps.services.Status.OK && r[0] ? r[0] : null)));
+  const one = code => new Promise(res => ps.categorySearch(code, (data, st) => res(st === kakao.maps.services.Status.OK ? data : []), { location: latlng, radius: Math.round(radius), sort: kakao.maps.services.SortBy.DISTANCE }));
   const lists = await Promise.all(NEAR_CODES.map(one));
-  const a = await addr;
   if (seq !== nearSeq) return;
   const seen = new Set(), found = [];
   lists.flat().forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); found.push(fromKakao(d)); } });
   found.sort((x, y) => x.distance - y.distance);
-  if (found.length) { showPop(found[0], found.slice(0, 15)); return; }
-  const road = a && a.road_address, jibun = a && a.address;
-  const name = (road && road.building_name) || (road ? road.address_name : jibun ? jibun.address_name : '이 위치');
-  showPop({ kakaoId:null, name, address: jibun ? jibun.address_name : '', roadAddress: road ? road.address_name : '', phone:'', lat, lng, placeUrl:'', kakaoCategory:'' }, null);
+  if (!found.length) { closePop(); return; }
+  showPop(found[0], found.slice(0, 15));
+  openPlaceInfo(found[0]);
 }
 
 /* ---------- gas stations ---------- */
@@ -1025,7 +1113,7 @@ function getPosition(){
 function haversine(a, b){ const R = 6371000, t = x => x * Math.PI / 180; const dLat = t(b.lat - a.lat), dLng = t(b.lng - a.lng); const h = Math.sin(dLat/2)**2 + Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLng/2)**2; return 2 * R * Math.asin(Math.sqrt(h)); }
 let gasInfo = { origin:null, fromGps:false, priced:false, error:'' };
 $('#btnGas').onclick = async () => {
-  closePop(); clearTemp(); clearGas();
+  closePop(); clearTemp(); clearGas(); placeView = null;
   resultsMode = 'gas'; results = []; lastPagination = null;
   showTab('results'); if (sheetIdx < 1) setSheet(1);
   $('#resultItems').innerHTML = `<div class="empty">현재 위치 확인 중…</div>`;
@@ -1036,15 +1124,13 @@ $('#btnGas').onclick = async () => {
   gasInfo = { origin:pos, fromGps, priced:false, error:'' };
   let list = null;
   try {
-    const { data, error } = await sb.functions.invoke('opinet-around', { body: { lat:pos.lat, lng:pos.lng, radius:10000, prodcd:prefs.gas.prodcd } });
-    if (error) throw error;
+    const data = await invokeFn('opinet-around', { lat:pos.lat, lng:pos.lng, radius:10000, prodcd:prefs.gas.prodcd });
     if (data && Array.isArray(data.stations)) { list = data.stations; gasInfo.priced = true; }
-    else if (data && data.error) throw new Error(data.error);
   } catch (err) { gasInfo.error = (err && err.message) || String(err); }
   if (!list) list = await kakaoGas(pos);
   results = list.map(s => ({ ...s, distance: s.distance ?? haversine(pos, s) })).filter(s => s.distance <= 10000);
   results.sort((a, b) => gasInfo.priced ? (a.price - b.price) || (a.distance - b.distance) : a.distance - b.distance);
-  renderGas(); drawGasPins();
+  renderGas(); drawGasPins(); updateClear();
 };
 async function kakaoGas(pos){
   const center = new kakao.maps.LatLng(pos.lat, pos.lng), out = [];
@@ -1060,7 +1146,7 @@ function renderGas(){
   const fuel = FUELS.find(f => f.code === prefs.gas.prodcd) || FUELS[0];
   const head = `<div class="resHead"><span>⛽ 반경 10km · ${esc(fuel.name)} · ${gasInfo.priced ? '가격 낮은 순' : '가까운 순'} (${results.length})</span><select class="btn sm" id="fuelSel">${FUELS.map(f => `<option value="${f.code}" ${f.code === fuel.code ? 'selected' : ''}>${f.name}</option>`).join('')}</select></div>`
     + (gasInfo.fromGps ? '' : `<div class="note">현재 위치를 쓸 수 없어 지도 가운데를 기준으로 찾았어요.</div>`)
-    + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 옵션 › 주유소를 참고하세요.${gasInfo.error ? `<br><span style="font-size:11.5px">(${esc(gasInfo.error.slice(0,120))})</span>` : ''}</div>`);
+    + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 옵션 › 주유소를 참고하세요.${gasInfo.error ? `<br><b style="font-size:12px;color:var(--danger)">오류: ${esc(gasInfo.error.slice(0,200))}</b>` : ''}</div>`);
   if (!results.length) { $('#resultItems').innerHTML = head + `<div class="empty">10km 안에 주유소를 찾지 못했어요.</div>`; bindFuel(); return; }
   const min = gasInfo.priced ? Math.min(...results.map(r => r.price)) : null;
   $('#resultItems').innerHTML = head + results.map((r, i) => `<div class="item" data-i="${i}">
@@ -1086,7 +1172,8 @@ function drawGasPins(){
   results.slice(0, 40).forEach((r, i) => {
     const el = document.createElement('div');
     el.className = 'gaspin' + (r.price != null && r.price === min ? ' best' : '');
-    el.textContent = r.price != null ? Number(r.price).toLocaleString() : '⛽';
+    const short = r.name.replace(/^(\(주\)|㈜|\(유\)|주식회사)\s*/, '').slice(0, 9);
+    el.innerHTML = (r.price != null ? `<b>${Number(r.price).toLocaleString()}원</b>` : '') + esc(short);
     el.addEventListener('click', e => { e.stopPropagation(); showTab('results'); const it = document.querySelector(`#resultItems .item[data-i="${i}"]`); if (it) { it.scrollIntoView({ block:'center' }); it.click(); } });
     const ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(r.lat, r.lng), content:el, xAnchor:0, yAnchor:0, zIndex: r.price === min ? 8 : 4, clickable:true });
     ov.setMap(map); gasOverlays.push(ov);
@@ -1339,7 +1426,10 @@ function bindMapTap(){
     tapTimer = setTimeout(() => {
       if (popOverlay) { closePop(); return; }
       if (sheetIdx === 2) { setSheet(1); return; }
-      nearbyAt(map.getProjection().coordsFromContainerPoint(new kakao.maps.Point(x, y)));
+      const proj = map.getProjection();
+      const p1 = proj.coordsFromContainerPoint(new kakao.maps.Point(x, y)), p2 = proj.coordsFromContainerPoint(new kakao.maps.Point(x + 22, y));
+      const rad = Math.max(8, Math.min(80, haversine({ lat:p1.getLat(), lng:p1.getLng() }, { lat:p2.getLat(), lng:p2.getLng() })));
+      nearbyAt(p1, rad);
     }, 300);
   }, true);
 }
@@ -1351,7 +1441,7 @@ function boot(){
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
   bindMapTap();
-  setSheet(1);
+  setSheet(1); $('#resultItems').innerHTML = EMPTY_RESULTS;
   applyPrefsVisual(); renderSaved(); renderPins(); drawManage();
   startAuth();
 }
