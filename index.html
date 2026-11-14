@@ -415,6 +415,38 @@ const DEFAULT_REGIONS = [
   {id:'gg-north', name:'경기북부', rules:{'경기':['고양시','남양주시','파주시','의정부시','양주시','구리시','포천시','동두천시','가평군','연천군']}},
   {id:'incheon', name:'인천', rules:{'인천':[]}}
 ];
+const GAS_BRANDS = [{k:'GS',label:'GS'},{k:'SK',label:'SK'},{k:'HD',label:'현대'},{k:'SOL',label:'S-Oil'},{k:'EX',label:'고속도로'},{k:'ETC',label:'기타'}];
+// 오피넷 상표 코드 → 필터 묶음. 가격 연결 전(카카오 목록)에는 이름으로 짐작한다.
+function brandGroup(r){
+  const b = r.brand || '';
+  if (b === 'GSC') return 'GS';
+  if (b === 'SKE') return 'SK';
+  if (b === 'HDO') return 'HD';
+  if (b === 'SOL') return 'SOL';
+  if (b === 'RTX') return 'EX';
+  if (b) return 'ETC';
+  const n = (r.name || '') + ' ' + (r.kakaoCategory || '');
+  if (/고속도로|휴게소/.test(n)) return 'EX';
+  if (/GS칼텍스|GS\s*주유|지에스/i.test(n)) return 'GS';
+  if (/SK에너지|SK\s*주유|에스케이/i.test(n)) return 'SK';
+  if (/현대오일|HD현대|오일뱅크/i.test(n)) return 'HD';
+  if (/S-?OIL|에쓰오일|에스오일/i.test(n)) return 'SOL';
+  return 'ETC';
+}
+const gasBrands = () => (prefs.gas && Array.isArray(prefs.gas.brands)) ? prefs.gas.brands : GAS_BRANDS.map(b => b.k);
+let gasAll = [];
+const applyBrand = list => list.filter(r => gasBrands().includes(brandGroup(r)));
+function brandChecksHTML(id){
+  return `<div class="wrap" id="${id}" style="gap:4px 12px">${GAS_BRANDS.map(b => `<label style="display:flex;gap:5px;align-items:center;font-size:14px"><input type="checkbox" value="${b.k}" ${gasBrands().includes(b.k) ? 'checked' : ''}>${b.label}</label>`).join('')}</div>`;
+}
+function bindBrandChecks(id, after){
+  const box = $('#' + id); if (!box) return;
+  box.querySelectorAll('input').forEach(inp => inp.onchange = () => {
+    prefs.gas.brands = [...box.querySelectorAll('input:checked')].map(x => x.value);
+    saveSettings(); after && after();
+  });
+}
+function refilterGas(){ if (resultsMode !== 'gas') return; results = applyBrand(gasAll); renderGas(); drawGasPins(); updateRestore(); }
 const gasRadius = () => Math.max(1000, Math.min(10000, +((prefs.gas && prefs.gas.radius) || 10000)));
 const FUELS = [{code:'B027',name:'휘발유'},{code:'D047',name:'경유'},{code:'B034',name:'고급휘발유'},{code:'K015',name:'LPG'}];
 const BRANDS = {SKE:'SK에너지',GSC:'GS칼텍스',HDO:'HD현대오일뱅크',SOL:'S-OIL',RTE:'알뜰주유소',RTX:'고속도로알뜰',NHO:'농협알뜰',ETC:'자가상표',E1G:'E1',SKG:'SK가스'};
@@ -429,7 +461,7 @@ const DEFAULT_PREFS = () => ({
   filter:{region:'', cats:[], visited:'all', minRating:0, tags:[]},
   mapStyle:{sat:100,bri:100,con:100,warm:0},
   pin:{size:100, opacity:100, labels:true},
-  gas:{prodcd:'B027', radius:10000},
+  gas:{prodcd:'B027', radius:10000, brands:['GS','SK','HD','SOL','EX','ETC']},
   sort:'region', nearOnly:false,
   mapType:'ROADMAP', layers:{TERRAIN:false, TRAFFIC:false, BICYCLE:false, USE_DISTRICT:false}
 });
@@ -1180,8 +1212,9 @@ $('#btnGas').onclick = async () => {
     if (data && Array.isArray(data.stations)) { list = data.stations; gasInfo.priced = true; }
   } catch (err) { gasInfo.error = (err && err.message) || String(err); }
   if (!list) list = await kakaoGas(pos);
-  results = list.map(s => ({ ...s, distance: s.distance ?? haversine(pos, s) })).filter(s => s.distance <= gasRadius());
-  results.sort((a, b) => gasInfo.priced ? (a.price - b.price) || (a.distance - b.distance) : a.distance - b.distance);
+  gasAll = list.map(s => ({ ...s, distance: s.distance ?? haversine(pos, s) })).filter(s => s.distance <= gasRadius());
+  gasAll.sort((a, b) => gasInfo.priced ? (a.price - b.price) || (a.distance - b.distance) : a.distance - b.distance);
+  results = applyBrand(gasAll);
   renderGas(); drawGasPins(); updateClear();
 };
 async function kakaoGas(pos){
@@ -1198,9 +1231,10 @@ function renderGas(){
   const fuel = FUELS.find(f => f.code === prefs.gas.prodcd) || FUELS[0];
   const rOpts = [1,2,3,5,7,10].map(k => `<option value="${k*1000}" ${gasRadius() === k*1000 ? 'selected' : ''}>${k}km</option>`).join('');
   const head = `<div class="resHead"><span>⛽ ${esc(fuel.name)} · ${gasInfo.priced ? '가격 낮은 순' : '가까운 순'} (${results.length})</span><span style="display:flex;gap:4px"><select class="btn sm" id="radSel">${[...new Set([...[1,2,3,5,7,10].map(k=>k*1000), gasRadius()])].sort((a,b)=>a-b).map(v => `<option value="${v}" ${gasRadius() === v ? 'selected' : ''}>${(v/1000).toFixed(v % 1000 ? 1 : 0)}km</option>`).join('')}</select><select class="btn sm" id="fuelSel">${FUELS.map(f => `<option value="${f.code}" ${f.code === fuel.code ? 'selected' : ''}>${f.name}</option>`).join('')}</select></span></div>`
+    + `<div style="padding:4px 14px 6px">${brandChecksHTML('gasBrandList')}</div>`
     + (gasInfo.fromGps ? '' : `<div class="note">현재 위치를 쓸 수 없어 지도 가운데를 기준으로 찾았어요.</div>`)
     + (gasInfo.priced ? '' : `<div class="note">가격 정보가 아직 연결되지 않아 가까운 순으로 보여 드려요. 오피넷 가격 연결은 옵션 › 주유소를 참고하세요.${gasInfo.error ? `<br><b style="font-size:12px;color:var(--danger)">오류: ${esc(gasInfo.error.slice(0,200))}</b>` : ''}</div>`);
-  if (!results.length) { $('#resultItems').innerHTML = head + `<div class="empty">10km 안에 주유소를 찾지 못했어요.</div>`; bindFuel(); return; }
+  if (!results.length) { $('#resultItems').innerHTML = head + `<div class="empty">${gasAll.length ? `선택한 상표의 주유소가 없어요. (전체 ${gasAll.length}곳)` : `${gasRadius()/1000}km 안에 주유소를 찾지 못했어요.`}</div>`; bindFuel(); return; }
   const min = gasInfo.priced ? Math.min(...results.map(r => r.price)) : null;
   $('#resultItems').innerHTML = head + results.map((r, i) => `<div class="item" data-i="${i}">
       <div class="ic">⛽</div>
@@ -1219,6 +1253,7 @@ function renderGas(){
   });
 }
 function bindFuel(){
+  bindBrandChecks('gasBrandList', refilterGas);
   const s = $('#fuelSel'); if (s) s.onchange = () => { prefs.gas.prodcd = s.value; saveSettings(); drawManage(); $('#btnGas').click(); };
   const r = $('#radSel'); if (r) r.onchange = () => { prefs.gas.radius = +r.value; saveSettings(); drawManage(); $('#btnGas').click(); };
 }
@@ -1360,8 +1395,10 @@ function drawManage(){
       saveSettings(); refreshAll();
     });
   });
-  $('#fuelPick').innerHTML = FUELS.map(f => `<button class="chip ${prefs.gas.prodcd === f.code ? 'on' : ''}" data-v="${f.code}">${f.name}</button>`).join('');
+  $('#fuelPick').innerHTML = FUELS.map(f => `<button class="chip ${prefs.gas.prodcd === f.code ? 'on' : ''}" data-v="${f.code}">${f.name}</button>`).join('')
+    + `<div style="width:100%;margin-top:10px"><div class="meta" style="margin-bottom:4px">상표 (체크한 곳만 보여요)</div>${brandChecksHTML('optBrandList')}</div>`;
   $('#fuelPick').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.gas.prodcd = b.dataset.v; saveSettings(); drawManage(); });
+  bindBrandChecks('optBrandList', refilterGas);
   $('#gasStatus').innerHTML = `<div class="slider"><span>찾을 반경</span><input type="range" min="1" max="10" step="1" value="${gasRadius()/1000}" id="gasRad"><b>${gasRadius()/1000}km</b></div>⛽ 주유소 버튼은 현재 위치에서 이 반경 안의 주유소를 가격 낮은 순으로 보여줘요.`;
   $('#gasRad').oninput = e => { prefs.gas.radius = +e.target.value * 1000; e.target.nextElementSibling.textContent = e.target.value + 'km'; saveSettings(); };
 }
