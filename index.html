@@ -159,10 +159,10 @@ button{cursor:pointer}
 .gaspin.best{background:var(--accent);color:#fff}
 .gaspin.best b{color:#fff}
 .me{width:16px;height:16px;border-radius:50%;background:#1c7ed6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(28,126,214,.25);transform:translate(-50%,-50%)}
-.pop{transform:translate(-50%,calc(-100% - 14px));background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.25);padding:12px 12px 10px;width:260px;font-size:14px;cursor:default}
+.pop{transform:translate(-50%,calc(-100% - 12px));background:#fff;border-radius:12px;box-shadow:0 3px 14px rgba(0,0,0,.25);padding:7px 12px;max-width:220px;font-size:14px;cursor:pointer;white-space:nowrap}
 .pop:after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#fff}
 .pop .x{position:absolute;right:6px;top:4px;border:0;background:transparent;font-size:20px;color:var(--muted);padding:2px 6px}
-.pop .pn{font-weight:700;font-size:15.5px;padding-right:22px}
+.pop .pn{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis}
 .pop .pc{font-size:12.5px;color:var(--muted);margin-top:2px}
 .pop .pa{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.4}
 .pop .pacts{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
@@ -1015,7 +1015,7 @@ function pickResult(i){
   const r = results[i]; clearTemp();
   tempMarker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(r.lat, r.lng), map });
   focusOn(r.lat, r.lng, Math.min(map.getLevel(), 4));
-  showPop(r, null);
+  showPop(r);
   if (r.kakaoId) openPlaceInfo(r);
   updateClear();
 }
@@ -1027,7 +1027,9 @@ function searchLinks(p){
   return `<a class="btn" href="https://search.naver.com/search.naver?query=${encodeURIComponent(q)}" target="_blank" rel="noopener">네이버 검색</a>
       <a class="btn" href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">구글 검색</a>`;
 }
-function openPlaceInfo(r){
+let placeOthers = [];
+function openPlaceInfo(r, others){
+  if (others) placeOthers = others; else if (!placeOthers.includes(r)) placeOthers = [];
   placeView = r; showTab('results'); if (sheetIdx < 1) setSheet(1);
   const s = isSaved(r), area = addrParts(r).sgg || addrParts(r).sido;
   $('#resultItems').innerHTML = `<div class="detail">
@@ -1042,8 +1044,22 @@ function openPlaceInfo(r){
       <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(area + ' ' + r.name)}" target="_blank" rel="noopener">네이버지도</a>
       ${searchLinks(r)}
     </div>
-  </div>`;
-  const back = $('#pvBack'); if (back) back.onclick = () => { placeView = null; renderResults(); };
+  </div>
+  ${placeOthers.filter(o => o !== r).length ? `<div class="resHead"><span>혹시 이곳인가요?</span></div>` + placeOthers.filter(o => o !== r).map(o => {
+    const so = isSaved(o), i = placeOthers.indexOf(o);
+    return `<div class="item" data-o="${i}">
+      <div class="ic">${esc(catInfo(guessCat(o)).emoji)}</div>
+      <div class="body"><div class="t"><span class="nm">${esc(o.name)}</span></div>
+        <div class="s">${o.distance != null ? fmtDist(o.distance) + ' · ' : ''}${esc((o.kakaoCategory || '').split(' > ').slice(-1)[0])}${o.kakaoCategory ? ' · ' : ''}${esc(o.roadAddress || o.address)}</div></div>
+      <button class="btn ${so ? 'dis' : 'pri'}" data-save="1">${so ? '저장됨' : '저장'}</button>
+    </div>`;
+  }).join('') : ''}`;
+  $('#resultItems').querySelectorAll('.item[data-o]').forEach(el => el.onclick = e => {
+    const o = placeOthers[+el.dataset.o];
+    if (e.target.closest('[data-save]')) { e.stopPropagation(); startSave(o); return; }
+    focusOn(o.lat, o.lng); showPop(o); openPlaceInfo(o);
+  });
+  const back = $('#pvBack'); if (back) back.onclick = () => { placeView = null; placeOthers = []; closePop(); renderResults(); };
   $('#pvSave').onclick = () => startSave(r);
   $('#p-results').scrollTop = 0;
   updateClear();
@@ -1052,30 +1068,12 @@ function openPlaceInfo(r){
 /* 지도 탭 → 근처 장소 카드 */
 const NEAR_CODES = ['FD6','CE7','MT1','CS2','HP8','PM9','AT4','CT1','AD5','BK9','OL7','AC5','SW8','PO3','SC4','PK6'];
 function closePop(){ if (popOverlay) { popOverlay.setMap(null); popOverlay = null; } }
-function showPop(r, others){
+function showPop(r){
   closePop();
-  const s = r.kakaoId !== undefined ? isSaved(r) : null;
   const el = document.createElement('div'); el.className = 'pop';
-  if (r.loading) el.innerHTML = `<div class="pn">이 근처 찾는 중…</div>`;
-  else el.innerHTML = `<button class="x" data-a="x">×</button>
-    <div class="pn">${esc(r.name)}</div>
-    <div class="pc">${esc((r.kakaoCategory || '').split(' > ').slice(-2).join(' > ') || (r.kakaoId ? '' : '주소'))}${r.phone ? ' · ' + esc(r.phone) : ''}</div>
-    <div class="pa">${esc(r.roadAddress || r.address || '')}</div>
-    <div class="pacts">
-      <button class="btn ${s ? '' : 'pri'} sm" data-a="save">${s ? '저장됨 · 보기' : '★ 저장'}</button>
-      ${r.placeUrl ? `<a class="btn sm" href="${esc(r.placeUrl)}" target="_blank" rel="noopener">상세정보</a>` : ''}
-      <a class="btn sm" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a>
-    </div>
-    ${others && others.length > 1 ? `<div class="alts"><div class="pc" style="margin-top:10px">혹시 이곳인가요?</div>${others.slice(1, 4).map((o, i) => `<button class="alt" data-a="alt" data-i="${i + 1}"><b>${esc(o.name)}</b> <span>${esc((o.kakaoCategory || '').split(' > ').slice(-1)[0])} · ${fmtDist(o.distance)}</span></button>`).join('')}</div>
-      ${others.length > 4 ? `<button class="others" data-a="others">근처 ${others.length}곳 모두 보기 ›</button>` : ''}` : ''}`;
+  el.innerHTML = `<div class="pn">${esc(r.name)}</div>`;
   ['click','mousedown','touchstart','pointerdown'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation()));
-  el.addEventListener('click', e => {
-    const a = e.target.closest('[data-a]'); if (!a) return;
-    if (a.dataset.a === 'x') closePop();
-    else if (a.dataset.a === 'save') startSave(r);
-    else if (a.dataset.a === 'alt') { const o = others[+a.dataset.i]; showPop(o, [o, ...others.filter(x => x !== o)]); openPlaceInfo(o); }
-    else if (a.dataset.a === 'others') { results = others; lastPagination = null; resultsMode = 'nearby'; resultsTitle = '누른 곳 근처'; placeView = null; clearGas(); renderResults(); showTab('results'); }
-  });
+  el.addEventListener('click', () => { if (placeView === r) { showTab('results'); setSheet(Math.max(1, sheetIdx)); } else openPlaceInfo(r); });
   popOverlay = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(r.lat, r.lng), content: el, xAnchor: 0, yAnchor: 0, zIndex: 30, clickable: true });
   popOverlay.setMap(map);
   requestAnimationFrame(() => keepPopVisible(r, el));
@@ -1101,8 +1099,8 @@ async function nearbyAt(latlng, radius){
   lists.flat().forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); found.push(fromKakao(d)); } });
   found.sort((x, y) => x.distance - y.distance);
   if (!found.length) { closePop(); return; }
-  showPop(found[0], found.slice(0, 15));
-  openPlaceInfo(found[0]);
+  showPop(found[0]);
+  openPlaceInfo(found[0], found.slice(1, 15));
 }
 
 /* ---------- gas stations ---------- */
