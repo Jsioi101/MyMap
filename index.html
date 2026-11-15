@@ -865,8 +865,8 @@ function applyPrefsVisual(){
 
 /* ---------- saved list ---------- */
 function renderSaved(){
-  $('#cnt').textContent = places.length ? `(${places.length})` : '';
-  $('#favBadge').hidden = !places.length; $('#favBadge').textContent = places.length;
+  $('#cnt').textContent = '';
+  $('#favBadge').hidden = true;
   const f = prefs.filter;
   // region chips
   const rc = [{id:'', name:'전체 지역'}, ...regions];
@@ -1735,7 +1735,7 @@ let geoStart = Promise.resolve(false);
 function startAtMyLocation(){
   geoStart = getPosition().then(pos => {
     if (!pos) return false;
-    showMe(pos); map.setLevel(4); map.setCenter(new kakao.maps.LatLng(pos.lat, pos.lng));
+    showMe(pos); map.setLevel(5); map.setCenter(new kakao.maps.LatLng(pos.lat, pos.lng));   // 레벨 5 = 축척 250m
     return true;
   });
 }
@@ -1743,7 +1743,7 @@ function startAtMyLocation(){
 /* ---------- boot ---------- */
 function fatal(html){ const d = document.createElement('div'); d.className = 'err'; d.innerHTML = html; document.body.appendChild(d); }
 function boot(){
-  map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 });
+  map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5 });
   ps = new kakao.maps.services.Places();
   geocoder = new kakao.maps.services.Geocoder();
   bindMapTap();
