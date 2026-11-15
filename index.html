@@ -144,6 +144,14 @@ button{cursor:pointer}
 .slider b{width:44px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
 .sgg{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:4px 8px;margin-top:6px}
 .sgg label{display:flex;gap:5px;align-items:center;font-size:14px;padding:3px 0}
+.selbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:8px 12px calc(8px + var(--safe-b));display:flex;flex-wrap:wrap;gap:6px;align-items:center;z-index:2}
+.selbar .cnt{font-weight:700;font-size:14px;margin-right:auto}
+.selbar .catrow{width:100%;display:flex;flex-wrap:wrap;gap:6px;padding-top:4px}
+.item .ck{width:22px;height:22px;flex:none;margin-top:6px;accent-color:var(--accent)}
+.dcats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.dcats .chip{font-size:13px;padding:4px 10px}
+.nvrow{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--soft);font-size:13.5px}
+.nvrow small{color:var(--muted);margin-left:auto;white-space:nowrap;font-size:12px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 76px);background:rgba(26,29,33,.92);color:#fff;padding:9px 14px;border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 /* map pins & popup */
@@ -248,10 +256,12 @@ button{cursor:pointer}
           <option value="name">이름순</option>
           <option value="rating">별점순</option>
         </select>
+        <button class="btn" id="btnSelect">선택</button>
       </div>
       <div class="chips" id="catChips"></div>
       <div id="savedItems"></div>
       <div class="sync" id="syncNote"></div>
+      <div class="selbar" id="selBar" hidden></div>
     </div>
     <div id="detail" class="detail" hidden></div>
   </div>
@@ -893,7 +903,15 @@ function renderSaved(){
     html += itemHTML(p);
   });
   $('#savedItems').innerHTML = html;
-  $('#savedItems').querySelectorAll('.item').forEach(el => el.onclick = () => openDetail(el.dataset.id, true));
+  $('#savedItems').querySelectorAll('.item').forEach(el => el.onclick = e => {
+    if (!selMode) return openDetail(el.dataset.id, true);
+    e.preventDefault();
+    const id = el.dataset.id; selIds.has(id) ? selIds.delete(id) : selIds.add(id);
+    el.classList.toggle('sel', selIds.has(id)); el.querySelector('.ck').checked = selIds.has(id);
+    drawSelBar();
+  });
+  lastListIds = list.map(p => p.id);
+  drawSelBar();
 }
 function afterFilterChange(fit){
   saveSettings(); applyPrefsVisual(); renderSaved(); renderPins();
@@ -902,9 +920,50 @@ function afterFilterChange(fit){
 }
 function resetFilter(){ prefs.filter = DEFAULT_PREFS().filter; afterFilterChange(true); }
 function stars(n){ return n ? `<span class="stars">${'★'.repeat(n)}${'☆'.repeat(5-n)}</span>` : ''; }
+/* ---------- 여러 개 선택해서 한 번에 수정 ---------- */
+let selMode = false, selIds = new Set(), lastListIds = [], selCatOpen = false, selCats = [];
+$('#btnSelect').onclick = () => { selMode = !selMode; selIds.clear(); selCatOpen = false; selCats = []; $('#btnSelect').textContent = selMode ? '완료' : '선택'; $('#btnSelect').classList.toggle('pri', selMode); renderSaved(); };
+function drawSelBar(){
+  const bar = $('#selBar'); bar.hidden = !selMode; if (!selMode) return;
+  const n = selIds.size, allOn = lastListIds.length && lastListIds.every(id => selIds.has(id));
+  bar.innerHTML = `<span class="cnt">${n}개 선택</span>
+    <button class="btn sm" data-a="all">${allOn ? '전체 해제' : '보이는 것 전체'}</button>
+    <button class="btn sm ${selCatOpen ? 'pri' : ''}" data-a="cat" ${n ? '' : 'disabled'}>카테고리</button>
+    <button class="btn sm danger" data-a="del" ${n ? '' : 'disabled'}>삭제</button>
+    ${selCatOpen && n ? `<div class="catrow">${cats.map(c => `<button class="chip ${selCats.includes(c.name) ? 'on' : ''}" data-c="${esc(c.name)}">${esc(c.emoji)} ${esc(c.name)}</button>`).join('')}</div>
+      <div class="catrow"><button class="btn sm pri" data-a="set" ${selCats.length ? '' : 'disabled'}>이 카테고리로 바꾸기</button><button class="btn sm" data-a="add" ${selCats.length ? '' : 'disabled'}>기존에 추가</button><button class="btn sm" data-a="remove" ${selCats.length ? '' : 'disabled'}>빼기</button></div>` : ''}`;
+  bar.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { const c = b.dataset.c; selCats = selCats.includes(c) ? selCats.filter(x => x !== c) : [...selCats, c]; drawSelBar(); });
+  bar.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.a;
+    if (a === 'all') { if (allOn) lastListIds.forEach(id => selIds.delete(id)); else lastListIds.forEach(id => selIds.add(id)); renderSaved(); return; }
+    if (a === 'cat') { selCatOpen = !selCatOpen; drawSelBar(); return; }
+    const targets = places.filter(p => selIds.has(p.id));
+    if (a === 'del') {
+      if (!(await confirmBox(`선택한 ${targets.length}곳을 삭제할까요?`))) return;
+      places = places.filter(p => !selIds.has(p.id));
+      const ids = [...selIds]; selIds.clear(); refreshAll();
+      const { error } = await sb.from('mymap_places').delete().in('id', ids);
+      if (error) { toast('삭제 실패: ' + error.message); await loadAll(); } else { cacheLocal(); toast(`${ids.length}곳을 삭제했어요`); }
+      return;
+    }
+    targets.forEach(p => {
+      let next = placeCats(p);
+      if (a === 'set') next = selCats.slice();
+      else if (a === 'add') next = [...new Set([...next, ...selCats])];
+      else if (a === 'remove') next = next.filter(c => !selCats.includes(c));
+      if (!next.length) next = ['기타'];
+      p.categories = next; p.category = next[0]; p.updatedAt = Date.now();
+    });
+    selCatOpen = false; selCats = [];
+    refreshAll();
+    if (await savePlaces(targets)) toast(`${targets.length}곳의 카테고리를 바꿨어요`);
+  });
+}
+
 function itemHTML(p){
   const c = primaryCat(p), pc = placeCats(p);
-  return `<div class="item ${p.id === selectedId ? 'sel' : ''}" data-id="${p.id}">
+  return `<div class="item ${p.id === selectedId || (selMode && selIds.has(p.id)) ? 'sel' : ''}" data-id="${p.id}">
+    ${selMode ? `<input type="checkbox" class="ck" ${selIds.has(p.id) ? 'checked' : ''} tabindex="-1">` : ''}
     <div class="ic" style="background:${esc(c.color)}22">${esc(c.emoji)}</div>
     <div class="body">
       <div class="t"><span class="nm">${esc(p.name)}</span>${stars(p.rating)}${p.visited ? '<span class="tag">가봄</span>' : ''}</div>
@@ -925,9 +984,9 @@ function openDetail(id, move){
   d.innerHTML = `
     <button class="back" id="dBack">‹ 목록</button>
     <h2>${esc(c.emoji)} ${esc(p.name)}</h2>
-    <div class="meta">${placeCats(p).map(n => `${esc(catInfo(n).emoji)} ${esc(n)}`).join('  ')} ${stars(p.rating)} ${p.visited ? '· 가 봤어요' : ''}</div>
+    <div class="dcats" id="dCats">${cats.map(c => `<button class="chip ${placeCats(p).includes(c.name) ? 'on' : ''}" data-c="${esc(c.name)}">${esc(c.emoji)} ${esc(c.name)}</button>`).join('')}</div>
+    ${p.rating || p.visited ? `<div class="meta">${stars(p.rating)} ${p.visited ? '· 가 봤어요' : ''}</div>` : ''}
     <div class="meta">${esc(p.roadAddress || p.address)}${p.roadAddress && p.address ? `<br><span style="font-size:12.5px">지번 ${esc(p.address)}</span>` : ''}</div>
-    <div class="meta">지역: ${esc(regionLabel(p))}</div>
     ${p.phone ? `<div class="meta">☎ <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a></div>` : ''}
     ${p.tags && p.tags.length ? `<div class="tags" style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${p.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
     ${p.memo ? `<div class="memo">${esc(p.memo)}</div>` : ''}
@@ -940,8 +999,16 @@ function openDetail(id, move){
     <div class="acts">
       <button class="btn" id="dEdit">수정</button>
       <button class="btn danger" id="dDel">삭제</button>
-    </div>
-    <div class="meta" style="margin-top:12px;font-size:12px">저장: ${new Date(p.createdAt).toLocaleDateString('ko-KR')}</div>`;
+    </div>`;
+  // 카테고리는 상세 화면에서 바로 눌러 켜고 끈다 (수정 창을 열 필요 없음)
+  $('#dCats').querySelectorAll('.chip').forEach(b => b.onclick = async () => {
+    const c = b.dataset.c; let next = placeCats(p);
+    next = next.includes(c) ? next.filter(x => x !== c) : [...next, c];
+    if (!next.length) { toast('카테고리는 하나 이상 있어야 해요'); return; }
+    p.categories = next; p.category = next[0]; p.updatedAt = Date.now();
+    b.classList.toggle('on', next.includes(c));
+    renderPins(); savePlace(p);
+  });
   $('#dBack').onclick = closeDetail;
   $('#dEdit').onclick = () => openEdit(p);
   $('#dDel').onclick = async () => {
@@ -1617,26 +1684,34 @@ $('#nvLoad').onclick = async () => {
     });
     nvData = { folder: d.folderName || '', fresh, dup };
     const catCount = {};
-    fresh.forEach(p => { const c = guessCat({ kakaoCategory: p.category }); catCount[c] = (catCount[c] || 0) + 1; });
+    fresh.forEach(p => { const c = nvCat(p); catCount[c] = (catCount[c] || 0) + 1; });
     $('#nvPreview').innerHTML = `<div class="note" style="margin:10px 0">
         <b>${esc(nvData.folder || '네이버 즐겨찾기')}</b> · ${incoming.length}곳<br>
         새로 추가 <b>${fresh.length}곳</b>${dup.length ? ` · 이미 있어서 건너뜀 ${dup.length}곳` : ''}<br>
         <span style="font-size:12px">${Object.entries(catCount).map(([c, n]) => `${esc(catInfo(c).emoji)} ${esc(c)} ${n}`).join(' · ')}</span>
       </div>
       <label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" id="nvTag" checked> 폴더 이름(${esc(nvData.folder || '네이버')})을 태그로 붙이기</label>
-      <div style="max-height:180px;overflow:auto;margin:8px 0;font-size:13px;color:var(--muted)">${fresh.slice(0, 200).map(p => `• ${esc(p.name)} <span style="font-size:12px">${esc(p.category)}</span>`).join('<br>')}</div>
+      <label class="nvrow" style="font-weight:700"><input type="checkbox" id="nvAll" checked> 전체 선택</label>
+      <div id="nvList" style="max-height:260px;overflow:auto;margin-bottom:8px">${fresh.map((p, i) => `<label class="nvrow"><input type="checkbox" data-i="${i}" checked> ${esc(p.name)} <small>${esc(p.category || '-')} → ${esc(catInfo(nvCat(p)).emoji)} ${esc(nvCat(p))}</small></label>`).join('')}</div>
       <div class="acts"><button class="btn pri" id="nvGo" ${fresh.length ? '' : 'disabled'}>${fresh.length}곳 가져오기</button></div>`;
+    const sync = () => { const n = $('#nvList').querySelectorAll('input:checked').length; $('#nvGo').textContent = `${n}곳 가져오기`; $('#nvGo').disabled = !n; $('#nvAll').checked = n === fresh.length; };
+    $('#nvAll').onchange = () => { $('#nvList').querySelectorAll('input').forEach(x => x.checked = $('#nvAll').checked); sync(); };
+    $('#nvList').querySelectorAll('input').forEach(x => x.onchange = sync);
     const go = $('#nvGo'); if (go) go.onclick = nvImport;
   } catch (e) {
     $('#nvPreview').innerHTML = `<p class="meta" style="color:var(--danger)">${esc(e.message || e)}</p>`;
   }
 };
+// 네이버 카테고리 이름과 같은 내 지도 카테고리가 있으면 그대로, 없으면 '기타'
+const nvCat = p => cats.some(c => c.name === p.category) ? p.category : '기타';
 async function nvImport(){
   if (!nvData || !nvData.fresh.length) return;
+  const picked = [...$('#nvList').querySelectorAll('input:checked')].map(x => nvData.fresh[+x.dataset.i]);
+  if (!picked.length) return toast('가져올 곳을 하나 이상 체크해 주세요');
   const tag = $('#nvTag') && $('#nvTag').checked ? (nvData.folder || '네이버').replace(/[,#]/g, ' ').trim() : '';
   const now = Date.now();
-  const list = nvData.fresh.map((p, i) => {
-    const c = guessCat({ kakaoCategory: p.category });
+  const list = picked.map((p, i) => {
+    const c = nvCat(p);
     return { id:newId(), kakaoId:null, name:p.name, address:p.address, roadAddress:'', phone:'', lat:p.lat, lng:p.lng, placeUrl:'',
       kakaoCategory:p.category, categories:[c], category:c, tags: tag ? [tag] : [], memo:p.memo || '', rating:0, visited:false,
       createdAt: now + i, updatedAt: now + i };
