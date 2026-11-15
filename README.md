@@ -12,6 +12,13 @@
 2. Supabase → Authentication → URL Configuration → Redirect URLs 에 `https://jsioi101.github.io/MyMap/` 추가
 3. 카카오 개발자 콘솔 → JavaScript SDK 도메인에 `https://jsioi101.github.io` 등록
 4. Supabase SQL Editor 에서 `supabase/mymap_v2.sql` 실행 (카테고리 여러 개, 지역, 옵션 동기화)
+5. Supabase SQL Editor 에서 `supabase/mymap_v3_shared.sql` 실행 (즐겨찾기를 승인된 회원 모두가 함께 보기)
+
+## 함께 쓰기
+
+- 즐겨찾기: 승인된 회원 모두가 같이 보고 추가·수정한다. 삭제는 추가한 사람 본인 또는 관리자만.
+- 옵션(필터·지도 색감·아이콘·카테고리 색·지역·주유소 설정): 각자 따로 저장된다.
+- 회원 승인은 TodoBoard 의 회원 관리에서 한다 (같은 Supabase 프로젝트).
 
 ## 주유소 가격 (선택)
 

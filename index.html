@@ -306,6 +306,7 @@ button{cursor:pointer}
       <h4>카테고리 <span class="meta" style="font-weight:400">(선택 안 하면 전체)</span></h4><div class="wrap" id="oCats"></div>
       <h4>방문</h4><div class="wrap" id="oVisited"></div>
       <h4>최소 별점</h4><div class="wrap" id="oRating"></div>
+      <h4>추가한 사람</h4><div class="wrap" id="oOwner"></div>
       <h4>태그</h4><div class="wrap" id="oTags"></div>
       <div class="acts" style="margin-top:12px"><button class="btn" id="optReset">필터 초기화</button></div>
     </div></details>
@@ -359,7 +360,7 @@ button{cursor:pointer}
       </div>
       <h4>홈 화면에 추가</h4>
       <p class="meta">안드로이드: 브라우저 메뉴 → <b>홈 화면에 추가</b><br>아이폰(사파리): 공유 버튼 → <b>홈 화면에 추가</b></p>
-      <div class="acts"><button class="btn danger" id="btnWipe">모든 즐겨찾기 지우기</button></div>
+      <div class="acts"><button class="btn danger" id="btnWipe">내가 추가한 즐겨찾기 모두 지우기</button></div>
     
     </div></details>
     <div class="dlg-acts">
@@ -493,7 +494,7 @@ const MAP_PRESETS = [
   {name:'흑백', v:{sat:0,bri:105,con:90,warm:0}}
 ];
 const DEFAULT_PREFS = () => ({
-  filter:{region:'', cats:[], visited:'all', minRating:0, tags:[]},
+  filter:{region:'', cats:[], visited:'all', minRating:0, tags:[], owner:''},
   mapStyle:{sat:100,bri:100,con:100,warm:0},
   pin:{size:100, opacity:100, labels:true, style:'emoji'},
   gas:{prodcd:'B027', radius:10000, brands:['GS','SK','HD','SOL','EX','ETC']},
@@ -567,12 +568,14 @@ function regionSummary(r){
 
 /* ---------- filtering ---------- */
 function activeFilterCount(){
-  const f = prefs.filter; return (f.region ? 1 : 0) + (f.cats.length ? 1 : 0) + (f.visited !== 'all' ? 1 : 0) + (f.minRating ? 1 : 0) + (f.tags.length ? 1 : 0);
+  const f = prefs.filter; return (f.region ? 1 : 0) + (f.cats.length ? 1 : 0) + (f.visited !== 'all' ? 1 : 0) + (f.minRating ? 1 : 0) + (f.tags.length ? 1 : 0) + (f.owner ? 1 : 0);
 }
 function passesFilter(p){
   const f = prefs.filter;
   if (f.region) { const r = regions.find(x => x.id === f.region); if (r && !inRegion(p, r)) return false; }
   if (f.cats.length && !placeCats(p).some(c => f.cats.includes(c))) return false;
+  if (f.owner === 'me' && !isMine(p)) return false;
+  if (f.owner && f.owner !== 'me' && p.ownerId !== f.owner) return false;
   if (f.visited === 'yes' && !p.visited) return false;
   if (f.visited === 'no' && p.visited) return false;
   if (f.minRating && (p.rating || 0) < f.minRating) return false;
@@ -585,7 +588,7 @@ const visiblePlaces = () => places.filter(passesFilter);
 const cacheKey = () => 'mymap.cache.' + (user ? user.id : 'none');
 function toRow(p){
   const pc = placeCats(p);
-  const row = { id:p.id, user_id:user.id, kakao_id:p.kakaoId || null, name:p.name, address:p.address || '', road_address:p.roadAddress || '',
+  const row = { id:p.id, user_id:p.ownerId || user.id, kakao_id:p.kakaoId || null, name:p.name, address:p.address || '', road_address:p.roadAddress || '',
     phone:p.phone || '', lat:p.lat, lng:p.lng, place_url:p.placeUrl || '', kakao_category:p.kakaoCategory || '', category:pc[0] || '기타',
     tags:p.tags || [], memo:p.memo || '', rating:p.rating || 0, visited:!!p.visited,
     created_at:new Date(p.createdAt || Date.now()).toISOString(), updated_at:new Date(p.updatedAt || Date.now()).toISOString() };
@@ -594,9 +597,25 @@ function toRow(p){
 }
 function fromRow(r){
   return { id:r.id, kakaoId:r.kakao_id, name:r.name, address:r.address, roadAddress:r.road_address, phone:r.phone, lat:r.lat, lng:r.lng,
-    placeUrl:r.place_url, kakaoCategory:r.kakao_category, category:r.category,
+    placeUrl:r.place_url, kakaoCategory:r.kakao_category, category:r.category, ownerId:r.user_id,
     categories:(r.categories && r.categories.length) ? r.categories : (r.category ? [r.category] : []),
     tags:r.tags || [], memo:r.memo, rating:r.rating, visited:r.visited, createdAt:Date.parse(r.created_at), updatedAt:Date.parse(r.updated_at) };
+}
+/* ---------- 함께 쓰는 즐겨찾기: 추가한 사람 ---------- */
+let people = {}, isAdmin = false;
+async function loadPeople(){
+  const [pp, ad] = await Promise.all([sb.rpc('mymap_people'), sb.rpc('is_admin')]);
+  if (!pp.error && Array.isArray(pp.data)) { people = {}; pp.data.forEach(r => people[r.user_id] = r.name); }
+  isAdmin = !ad.error && !!ad.data;
+}
+const isMine = p => !p.ownerId || (user && p.ownerId === user.id);
+const canDelete = p => isMine(p) || isAdmin;
+const ownerName = p => isMine(p) ? '나' : (people[p.ownerId] || '다른 회원');
+// 다른 사람이 쓴 카테고리가 내 카테고리 목록에 없으면 내 목록에 더한다 (색·이모지는 각자 정함)
+function adoptCats(){
+  let added = false;
+  places.forEach(p => placeCats(p).forEach(n => { if (!cats.some(c => c.name === n)) { ensureCat(n); added = true; } }));
+  if (added) saveSettings();
 }
 function cacheLocal(){ writeJSON(cacheKey(), { places, cats, regions, prefs }); }
 function setSync(msg){ const n = $('#syncNote'); if (n) n.textContent = msg; }
@@ -610,6 +629,7 @@ async function loadAll(){
   needV2 = pr.data.length ? !('categories' in pr.data[0]) : (sr.data ? !('prefs' in sr.data) : needV2);
   places = pr.data.map(fromRow);
   if (sr.data) applySettings(sr.data);
+  adoptCats();
   cacheLocal(); if (needV2) v2Warn(); else setSync('');
   refreshAll();
   return true;
@@ -660,7 +680,7 @@ function refreshAll(){
 function subscribe(){
   if (rtChannel) sb.removeChannel(rtChannel);
   rtChannel = sb.channel('mymap-' + user.id)
-    .on('postgres_changes', { event:'*', schema:'public', table:'mymap_places', filter:'user_id=eq.' + user.id }, payload => {
+    .on('postgres_changes', { event:'*', schema:'public', table:'mymap_places' }, payload => {
       if (payload.eventType === 'DELETE') { places = places.filter(p => p.id !== payload.old.id); }
       else {
         const np = fromRow(payload.new); const i = places.findIndex(p => p.id === np.id);
@@ -943,9 +963,11 @@ function drawSelBar(){
     if (a === 'cat') { selCatOpen = !selCatOpen; drawSelBar(); return; }
     const targets = places.filter(p => selIds.has(p.id));
     if (a === 'del') {
-      if (!(await confirmBox(`선택한 ${targets.length}곳을 삭제할까요?`))) return;
-      places = places.filter(p => !selIds.has(p.id));
-      const ids = [...selIds]; selIds.clear(); refreshAll();
+      const ok = targets.filter(canDelete), skip = targets.length - ok.length;
+      if (!ok.length) return toast('다른 회원이 추가한 곳은 지울 수 없어요');
+      if (!(await confirmBox(`선택한 ${ok.length}곳을 삭제할까요?${skip ? ` (다른 회원이 추가한 ${skip}곳은 제외)` : ''}`))) return;
+      const ids = ok.map(p => p.id);
+      places = places.filter(p => !ids.includes(p.id)); selIds.clear(); refreshAll();
       const { error } = await sb.from('mymap_places').delete().in('id', ids);
       if (error) { toast('삭제 실패: ' + error.message); await loadAll(); } else { cacheLocal(); toast(`${ids.length}곳을 삭제했어요`); }
       return;
@@ -994,6 +1016,7 @@ function openDetail(id, move){
     ${p.phone ? `<div class="meta">☎ <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a></div>` : ''}
     ${p.tags && p.tags.length ? `<div class="tags" style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${p.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
     ${p.memo ? `<div class="memo">${esc(p.memo)}</div>` : ''}
+    ${Object.keys(people).length > 1 ? `<div class="meta" style="font-size:12.5px">추가: ${esc(ownerName(p))}</div>` : ''}
     <div class="acts">
       <a class="btn pri" href="${esc(kakaoLink(p))}" target="_blank" rel="noopener">카카오맵에서 보기</a>
       <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(p.name)},${p.lat},${p.lng}" target="_blank" rel="noopener">길찾기</a>
@@ -1002,7 +1025,7 @@ function openDetail(id, move){
     </div>
     <div class="acts">
       <button class="btn" id="dEdit">수정</button>
-      <button class="btn danger" id="dDel">삭제</button>
+      ${canDelete(p) ? '<button class="btn danger" id="dDel">삭제</button>' : ''}
     </div>`;
   // 카테고리는 상세 화면에서 바로 눌러 켜고 끈다 (수정 창을 열 필요 없음)
   $('#dCats').querySelectorAll('.chip').forEach(b => b.onclick = async () => {
@@ -1015,7 +1038,7 @@ function openDetail(id, move){
   });
   $('#dBack').onclick = closeDetail;
   $('#dEdit').onclick = () => openEdit(p);
-  $('#dDel').onclick = async () => {
+  if ($('#dDel')) $('#dDel').onclick = async () => {
     if (await confirmBox(`'${p.name}'을(를) 삭제할까요?`)) {
       places = places.filter(x => x.id !== p.id); closeDetail(); renderPins();
       if (await removePlace(p.id)) toast('삭제했어요');
@@ -1397,6 +1420,9 @@ function drawOptions(){
   $('#oVisited').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.filter.visited = b.dataset.v; afterFilterChange(false); });
   $('#oRating').innerHTML = chipsHTML([0,1,2,3,4,5].map(n => ({v:n, label: n ? '★'.repeat(n) + ' 이상' : '상관없음'})), it => f.minRating === it.v);
   $('#oRating').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.filter.minRating = +b.dataset.v; afterFilterChange(false); });
+  const owners = [...new Set(places.map(p => p.ownerId).filter(Boolean))].filter(id => !user || id !== user.id);
+  $('#oOwner').innerHTML = chipsHTML([{v:'', label:'모두'}, {v:'me', label:'나'}, ...owners.map(id => ({ v:id, label: people[id] || '다른 회원' }))], it => (f.owner || '') === it.v);
+  $('#oOwner').querySelectorAll('.chip').forEach(b => b.onclick = () => { prefs.filter.owner = b.dataset.v; afterFilterChange(false); });
   const allTags = [...new Set(places.flatMap(p => p.tags || []))].sort((a,b) => a.localeCompare(b, 'ko'));
   $('#oTags').innerHTML = allTags.length ? chipsHTML(allTags.map(t => ({v:t, label:'#' + t})), it => f.tags.includes(it.v)) : '<span class="meta">저장한 태그가 없어요</span>';
   $('#oTags').querySelectorAll('.chip').forEach(b => b.onclick = () => { const t = b.dataset.v; prefs.filter.tags = f.tags.includes(t) ? f.tags.filter(x => x !== t) : [...f.tags, t]; afterFilterChange(false); });
@@ -1613,9 +1639,10 @@ $('#importFile').onchange = async e => {
   } catch (err) { toast('파일을 읽지 못했어요. 이 앱에서 내보낸 JSON인지 확인해 주세요'); }
 };
 $('#btnWipe').onclick = async () => {
-  if (!places.length) return toast('지울 즐겨찾기가 없어요');
-  if (await confirmBox(`즐겨찾기 ${places.length}곳을 모두 지울까요? 되돌릴 수 없어요. 먼저 내보내기로 백업하는 걸 권해요.`, '모두 삭제')) {
-    places = []; closeDetail(); renderPins();
+  const mine = places.filter(isMine);
+  if (!mine.length) return toast('내가 추가한 즐겨찾기가 없어요');
+  if (await confirmBox(`내가 추가한 즐겨찾기 ${mine.length}곳을 모두 지울까요? 다른 회원이 추가한 곳은 남아요. 되돌릴 수 없어요.`, '모두 삭제')) {
+    places = places.filter(p => !isMine(p)); closeDetail(); renderPins();
     const { error } = await sb.from('mymap_places').delete().eq('user_id', user.id);
     if (error) { toast('삭제 실패: ' + error.message); await loadAll(); } else { cacheLocal(); toast('모두 지웠어요'); }
   }
@@ -1795,6 +1822,7 @@ async function handleSession(session){
     applyPrefsVisual(); refreshAll();
   }
   gate('off');
+  await loadPeople();
   await loadAll();
   subscribe();
   await migrateLegacy();
