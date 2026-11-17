@@ -37,6 +37,16 @@ create policy "mymap trips delete" on public.mymap_trips
 
 grant select, insert, update, delete on public.mymap_trips to authenticated;
 
+-- 다른 사람이 수정해도 '만든 사람'이 바뀌지 않게 한다. (mymap_v3_shared.sql 에도 있는 함수)
+create or replace function public.mymap_keep_owner()
+returns trigger language plpgsql as $$
+begin
+  new.user_id := old.user_id;
+  new.created_at := old.created_at;
+  return new;
+end;
+$$;
+
 drop trigger if exists mymap_trips_keep_owner on public.mymap_trips;
 create trigger mymap_trips_keep_owner
   before update on public.mymap_trips
