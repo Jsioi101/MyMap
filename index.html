@@ -156,6 +156,28 @@ button{cursor:pointer}
 .dcats .chip{font-size:13px;padding:4px 10px}
 .nvrow{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--soft);font-size:13.5px}
 .nvrow small{color:var(--muted);margin-left:auto;white-space:nowrap;font-size:12px}
+.tpin{transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;cursor:pointer}
+.tpin .nums{display:flex;gap:2px}
+.tpin b{min-width:26px;height:26px;padding:0 6px;border-radius:13px;color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.tpin .l{margin-top:2px;background:var(--paper);border-radius:6px;padding:1px 6px;font-size:11.5px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.2);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.zoomfar .tpin .l{display:none}
+.chip .dd{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.dayhead{display:flex;align-items:center;gap:8px;padding:14px 14px 6px;font-weight:700;font-size:15px}
+.dayhead i{width:10px;height:10px;border-radius:50%}
+.dayhead .meta{font-weight:500;font-size:13px;color:var(--muted)}
+.stop{display:flex;gap:10px;align-items:center;padding:7px 14px}
+.stop.sel{background:var(--accent-soft)}
+.stop .num{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;flex:none}
+.stop .body{flex:1;min-width:0;cursor:pointer}
+.stop .body b{display:block;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop .body small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop .ctl{display:flex;gap:3px;flex:none}
+.stop .ctl .btn{padding:4px 7px}
+.leg{margin-left:26px;padding:0 0 0 22px;border-left:2px dotted var(--line);font-size:11.5px;color:var(--muted);line-height:18px}
+.vbanner{display:none}
+.viewer .vbanner{display:flex;gap:8px;align-items:center;pointer-events:auto;background:var(--paper);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.15);padding:10px 12px;font-size:14px}
+.viewer .vbanner b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viewer .searchbox,.viewer .quick,.viewer .tab:not([data-tab=trips]){display:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 76px);background:rgba(61,57,41,.94);color:#faf9f5;padding:9px 14px;border-radius:10px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 /* map pins & popup */
@@ -220,6 +242,7 @@ button{cursor:pointer}
 </div>
 
 <div class="topbar">
+  <div class="vbanner"><span>🧳</span><b id="vbName"></b><span class="tag">보기 전용</span><a class="btn sm" href="./">내 지도 열기</a></div>
   <form class="searchbox" id="searchForm" autocomplete="off">
     <input id="q" type="search" placeholder="매장명이나 주소 검색" enterkeyhint="search">
     <button type="button" class="qclear" id="qClear" hidden aria-label="검색 초기화">✕</button>
@@ -227,6 +250,7 @@ button{cursor:pointer}
   </form>
   <div class="quick">
     <button class="qbtn" id="btnFav">⭐ 즐겨찾기 <span class="badge" id="favBadge" hidden></span></button>
+    <button class="qbtn" id="btnTrip">🧳 여행</button>
     <button class="qbtn" id="btnGas">⛽ 주유소</button>
     <button class="qbtn" id="btnOptions">⚙️ 옵션 <span class="badge" id="optBadge" hidden></span></button>
     <button class="qbtn" id="btnNear">▢ 지도 안에서만 검색</button>
@@ -246,6 +270,7 @@ button{cursor:pointer}
     <div class="tabs">
       <button class="tab on" data-tab="saved">즐겨찾기 <span id="cnt"></span></button>
       <button class="tab" data-tab="results">검색 결과</button>
+      <button class="tab" data-tab="trips">여행</button>
     </div>
   </div>
 
@@ -274,7 +299,39 @@ button{cursor:pointer}
     <div id="resultItems"></div>
   </div>
 
+  <div class="panel" id="p-trips" hidden>
+    <div id="tripBody"></div>
+  </div>
+
 </section>
+
+<!-- 여행 만들기/수정 -->
+<div class="modal" id="tripModal" hidden>
+  <div class="dialog">
+    <h3 id="tmTitle">새 여행</h3>
+    <div class="field"><label>여행 이름</label><input id="tmName" placeholder="예: 제주 가족여행"></div>
+    <div class="field" style="display:flex;gap:8px"><div style="flex:1"><label>시작</label><input type="date" id="tmStart"></div><div style="flex:1"><label>끝</label><input type="date" id="tmEnd"></div></div>
+    <div class="dlg-acts"><button class="btn" id="tmCancel">취소</button><button class="btn pri" id="tmSave">저장</button></div>
+  </div>
+</div>
+<!-- 일정에 장소 추가 -->
+<div class="modal" id="pickModal" hidden>
+  <div class="dialog">
+    <h3 id="pkTitle">장소 추가</h3>
+    <div class="wrap" id="pkModes" style="margin-bottom:8px"><button class="chip on" data-m="fav">⭐ 즐겨찾기에서</button><button class="chip" data-m="new">🔍 새 장소 찾기</button></div>
+    <input id="pkQ" type="search" enterkeyhint="search" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;background:var(--bg)">
+    <div id="pkList" style="margin:6px -16px 0"></div>
+    <div class="dlg-acts"><button class="btn pri" id="pkDone">닫기</button></div>
+  </div>
+</div>
+<!-- 지도 공유 -->
+<div class="modal" id="shareModal" hidden>
+  <div class="dialog">
+    <h3>지도 공유</h3>
+    <div id="shBody"></div>
+    <div class="dlg-acts"><button class="btn" id="shClose">닫기</button></div>
+  </div>
+</div>
 
 <!-- 저장/수정 -->
 <div class="modal" id="editModal" hidden>
@@ -676,6 +733,7 @@ function refreshAll(){
   if (map) renderPins();
   drawManage(); renderResults();
   if (!$('#optModal').hidden) drawOptions();
+  if (!$('#p-trips').hidden) renderTrips();
 }
 function subscribe(){
   if (rtChannel) sb.removeChannel(rtChannel);
@@ -688,6 +746,7 @@ function subscribe(){
       }
       cacheLocal(); refreshAll();
     })
+    .on('postgres_changes', { event:'*', schema:'public', table:'mymap_trips' }, onTripChange)
     .on('postgres_changes', { event:'*', schema:'public', table:'mymap_settings', filter:'user_id=eq.' + user.id }, payload => {
       if (!payload.new) return;
       const j = JSON.stringify({ cats: payload.new.cats, regions: payload.new.regions, prefs: payload.new.prefs });
@@ -696,7 +755,7 @@ function subscribe(){
     })
     .subscribe();
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && user && sb) loadAll(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && user && sb && !tripReadOnly) { loadAll(); loadTrips(); } });
 
 async function migrateLegacy(){
   const legacy = readJSON(LEGACY_STORE, []);
@@ -735,12 +794,14 @@ function setSheet(i){
 function hasResults(){ return !!(results.length || placeView); }
 function updateRestore(){
   const b = $('#btnRestore'); if (!b) return;
-  const show = sheetIdx < 0 && hasResults();
+  const tr = typeof tripView !== 'undefined' && tripView && curTrip();
+  const show = sheetIdx < 0 && (hasResults() || !!tr);
   b.hidden = !show;
-  if (show) b.innerHTML = (placeView ? `📍 ${esc(placeView.name)}` : resultsMode === 'gas' ? `⛽ 주유소 ${results.length}곳` : `🔍 검색 결과 ${results.length}개`) + ' <span>▲</span>';
+  b.dataset.tab = tr && (!$('#p-trips').hidden || !hasResults()) ? 'trips' : 'results';
+  if (show) b.innerHTML = b.dataset.tab === 'trips' ? `🧳 ${esc(tr.name)} ▲` : (placeView ? `📍 ${esc(placeView.name)}` : resultsMode === 'gas' ? `⛽ 주유소 ${results.length}곳` : `🔍 검색 결과 ${results.length}개`) + ' <span>▲</span>';
   const fb = $('#btnFav'); if (fb) fb.classList.toggle('on', sheetIdx >= 0 && !$('#p-saved').hidden);
 }
-$('#btnRestore').onclick = () => { showTab('results'); setSheet(1); };
+$('#btnRestore').onclick = () => { if ($('#btnRestore').dataset.tab === 'trips') openTrips(); else { showTab('results'); setSheet(1); } };
 $('#btnFav').onclick = () => {
   if (sheetIdx >= 0 && !$('#p-saved').hidden) { setSheet(-1); return; }
   showTab('saved'); closeDetail(); setSheet(1);
@@ -816,7 +877,7 @@ function snapSheet(h, vel){
 })();
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
-  ['saved','results'].forEach(n => $('#p-' + n).hidden = n !== name);
+  ['saved','results','trips'].forEach(n => $('#p-' + n).hidden = n !== name);
   if (sheetIdx < 1) setSheet(1); else updateRestore();
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => { showTab(t.dataset.tab); if (t.dataset.tab === 'saved') closeDetail(); });
@@ -830,6 +891,7 @@ function focusOn(lat, lng, level){
   map.panBy(0, Math.round(sheetPx() / 2) - 30);
 }
 function renderPins(){
+  if (typeof tripView !== 'undefined' && tripView && renderTripPins()) return;
   overlays.forEach(o => o.setMap(null)); overlays = [];
   visiblePlaces().forEach(p => {
     const c = primaryCat(p);
@@ -1018,6 +1080,7 @@ function openDetail(id, move){
     ${p.memo ? `<div class="memo">${esc(p.memo)}</div>` : ''}
     ${Object.keys(people).length > 1 ? `<div class="meta" style="font-size:12.5px">추가: ${esc(ownerName(p))}</div>` : ''}
     <div class="acts">
+      ${tripAddBtn()}
       <a class="btn pri" href="${esc(kakaoLink(p))}" target="_blank" rel="noopener">카카오맵에서 보기</a>
       <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(p.name)},${p.lat},${p.lng}" target="_blank" rel="noopener">길찾기</a>
       <a class="btn" href="https://map.naver.com/p/search/${encodeURIComponent(p.name + ' ' + addrParts(p).sgg)}" target="_blank" rel="noopener">네이버지도</a>
@@ -1037,6 +1100,7 @@ function openDetail(id, move){
     renderPins(); savePlace(p);
   });
   $('#dBack').onclick = closeDetail;
+  bindTripAdd($('#detail'), p);
   $('#dEdit').onclick = () => openEdit(p);
   if ($('#dDel')) $('#dDel').onclick = async () => {
     if (await confirmBox(`'${p.name}'을(를) 삭제할까요?`)) {
@@ -1221,6 +1285,7 @@ function openPlaceInfo(r, others){
     <div class="meta">${esc((r.kakaoCategory || '').split(' > ').slice(-2).join(' > '))}${r.phone ? ' · ' + esc(r.phone) : ''}</div>
     <div class="meta">${esc(r.roadAddress || r.address || '')}</div>
     <div class="acts">
+      ${tripAddBtn()}
       <button class="btn ${s ? '' : 'pri'}" id="pvSave">${s ? '저장됨 · 보기' : '★ 저장'}</button>
       ${r.placeUrl ? `<a class="btn" href="${esc(r.placeUrl)}" target="_blank" rel="noopener">카카오 상세</a>` : ''}
       <a class="btn" href="https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lng}" target="_blank" rel="noopener">길찾기</a>
@@ -1244,6 +1309,7 @@ function openPlaceInfo(r, others){
   });
   const back = $('#pvBack'); if (back) back.onclick = () => { placeView = null; placeOthers = []; closePop(); renderResults(); };
   $('#pvSave').onclick = () => startSave(r);
+  bindTripAdd($('#resultItems'), r);
   $('#p-results').scrollTop = 0;
   updateClear();
 }
@@ -1767,6 +1833,297 @@ function startAtMyLocation(){
   });
 }
 
+/* ---------- 여행 일정 ---------- */
+const DAY_COLORS = ['#c96442','#4a90e2','#3d9970','#e8559c','#ff8a00','#8e6fd1','#00a0b0','#b8860b','#6b6b6b','#d6336c'];
+const dayColor = i => DAY_COLORS[i % DAY_COLORS.length];
+let trips = [], tripView = null, tripDay = -1, tripTarget = 0, tripReadOnly = false, sharedPlaces = null, tripsMissing = false, tripLines = [], tripSel = '';
+const curTrip = () => trips.find(t => t.id === tripView);
+const placeById = id => (sharedPlaces || places).find(p => p.id === id);
+function fromTripRow(r){ return { id:r.id, ownerId:r.user_id, name:r.name, start:r.start_date || '', end:r.end_date || '', days:Array.isArray(r.days) ? r.days : [], shareToken:r.share_token || null, updatedAt:Date.parse(r.updated_at) || 0 }; }
+function toTripRow(t){ return { id:t.id, user_id:t.ownerId || user.id, name:t.name, start_date:t.start || null, end_date:t.end || null, days:t.days, share_token:t.shareToken, updated_at:new Date(t.updatedAt || Date.now()).toISOString() }; }
+function dateList(start, end){
+  const out = []; if (!start) return out;
+  const d = new Date(start + 'T00:00:00'), e = new Date((end || start) + 'T00:00:00');
+  while (d <= e && out.length < 60) { out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')); d.setDate(d.getDate() + 1); }
+  return out;
+}
+function fmtDay(s){ if (!s) return ''; const d = new Date(s + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()} (${'일월화수목금토'[d.getDay()]})`; }
+function tripRange(t){ const n = t.days.length; return t.start ? `${fmtDay(t.start)} ~ ${fmtDay(t.end || t.start)} · ${n > 1 ? `${n - 1}박 ${n}일` : '당일'}` : ''; }
+async function loadTrips(){
+  const { data, error } = await sb.from('mymap_trips').select('*').order('start_date', { ascending:false });
+  if (error) { tripsMissing = /mymap_trips|schema cache|does not exist/i.test(error.message); if (!tripsMissing) toast('여행 불러오기 실패: ' + error.message); return; }
+  tripsMissing = false;
+  trips = data.map(fromTripRow);
+  if (!$('#p-trips').hidden) renderTrips();
+  if (tripView) renderPins();
+}
+const tripTimers = {};
+function saveTrip(t, now){
+  t.updatedAt = Date.now();
+  clearTimeout(tripTimers[t.id]);
+  tripTimers[t.id] = setTimeout(async () => {
+    const { error } = await sb.from('mymap_trips').upsert(toTripRow(t));
+    if (error) toast('여행 저장 실패: ' + error.message);
+  }, now ? 0 : 400);
+}
+function onTripChange(payload){
+  if (payload.eventType === 'DELETE') { trips = trips.filter(t => t.id !== payload.old.id); if (tripView === payload.old.id) closeTrip(); }
+  else {
+    const nt = fromTripRow(payload.new), i = trips.findIndex(t => t.id === nt.id);
+    if (i < 0) trips.push(nt); else if (nt.updatedAt > trips[i].updatedAt + 50) trips[i] = nt; else return;
+  }
+  if (!$('#p-trips').hidden) renderTrips();
+  if (tripView) renderPins();
+}
+
+/* 목록 · 상세 */
+function openTrips(){ showTab('trips'); renderTrips(); if (sheetIdx < 1) setSheet(1); }
+function openTrip(id){ tripView = id; tripDay = -1; tripTarget = 0; tripSel = ''; renderTrips(); renderPins(); fitTrip(); updateRestore(); }
+function closeTrip(){ tripView = null; tripLines.forEach(l => l.setMap(null)); tripLines = []; renderTrips(); renderPins(); updateRestore(); }
+function renderTrips(){
+  const box = $('#tripBody'); if (!box) return;
+  const t = curTrip();
+  if (t) return renderTripDetail(t, box);
+  if (tripsMissing) { box.innerHTML = `<div class="empty">여행 기능을 쓰려면 Supabase에서 <b>mymap_v4_trips.sql</b>을 한 번 실행해 주세요.</div>`; return; }
+  box.innerHTML = `<div class="toolbar"><span class="meta" style="flex:1">여행을 만들고 날짜별로 즐겨찾기를 순서대로 담아요.</span><button class="btn pri" id="tNew">+ 새 여행</button></div>`
+    + (trips.length ? trips.map(x => {
+        const n = x.days.reduce((a, d) => a + (d.stops || []).length, 0);
+        return `<div class="item" data-t="${x.id}"><div class="ic">🧳</div><div class="body"><div class="t"><span class="nm">${esc(x.name)}</span>${x.shareToken ? '<span class="tag">공유 중</span>' : ''}</div><div class="s">${esc(tripRange(x))} · 장소 ${n}곳</div></div></div>`;
+      }).join('') : `<div class="empty">아직 만든 여행이 없어요.<br><b>+ 새 여행</b>으로 시작해 보세요.</div>`);
+  $('#tNew').onclick = () => openTripEdit(null);
+  box.querySelectorAll('[data-t]').forEach(el => el.onclick = () => openTrip(el.dataset.t));
+}
+function renderTripDetail(t, box){
+  const ro = tripReadOnly, mine = !t.ownerId || (user && t.ownerId === user.id);
+  const show = tripDay < 0 ? t.days.map((_, i) => i) : [tripDay];
+  let html = `<div class="detail" style="padding-bottom:4px">
+    ${ro ? '' : '<button class="back" id="tBack">‹ 여행 목록</button>'}
+    <h2>🧳 ${esc(t.name)}</h2><div class="meta">${esc(tripRange(t))}</div>
+    ${ro ? '' : `<div class="acts"><button class="btn" id="tEdit">이름·날짜</button><button class="btn" id="tShare">${t.shareToken ? '공유 링크' : '지도 공유'}</button>${mine || isAdmin ? '<button class="btn danger" id="tDel">삭제</button>' : ''}</div>`}
+  </div>
+  <div class="chips" id="dayChips"><button class="chip ${tripDay < 0 ? 'on' : ''}" data-d="-1">전체</button>${t.days.map((d, i) => `<button class="chip ${tripDay === i ? 'on' : ''}" data-d="${i}"><span class="dd" style="background:${dayColor(i)}"></span>${i + 1}일차 ${esc(fmtDay(d.date))}</button>`).join('')}</div>`;
+  show.forEach(di => {
+    const d = t.days[di], stops = d.stops || [];
+    html += `<div class="dayhead"><i style="background:${dayColor(di)}"></i>${di + 1}일차 <span class="meta">${esc(fmtDay(d.date))} · ${stops.length}곳</span></div>`;
+    let prev = null;
+    stops.forEach((s, si) => {
+      const p = placeById(s.placeId);
+      if (prev && p) html += `<div class="leg">${fmtDist(haversine(prev, p))}</div>`;
+      if (p) prev = p;
+      html += `<div class="stop ${tripSel === di + '-' + si ? 'sel' : ''}" data-d="${di}" data-s="${si}">
+        <span class="num" style="background:${dayColor(di)}">${si + 1}</span>
+        <div class="body" data-a="go"><b>${p ? esc(p.name) : '(삭제된 장소)'}</b><small>${p ? esc(placeCats(p).join(' · ')) : ''}${p && (p.roadAddress || p.address) ? ' · ' + esc(p.roadAddress || p.address) : ''}</small></div>
+        ${ro ? (p ? `<a class="btn sm" href="https://map.kakao.com/link/to/${encodeURIComponent(p.name)},${p.lat},${p.lng}" target="_blank" rel="noopener">길찾기</a>` : '')
+            : `<div class="ctl"><button class="btn sm" data-a="up" ${si ? '' : 'disabled'}>↑</button><button class="btn sm" data-a="down" ${si < stops.length - 1 ? '' : 'disabled'}>↓</button>
+               ${t.days.length > 1 ? `<select class="btn sm" data-a="move"><option value="">이동</option>${t.days.map((_, k) => k === di ? '' : `<option value="${k}">${k + 1}일차</option>`).join('')}</select>` : ''}
+               <button class="btn sm danger" data-a="del">✕</button></div>`}
+      </div>`;
+    });
+    if (!stops.length) html += `<div class="meta" style="padding:4px 14px 8px 50px;font-size:13px">아직 장소가 없어요.</div>`;
+    if (!ro) html += `<div style="padding:4px 14px 10px 50px"><button class="btn sm" data-add="${di}">+ ${di + 1}일차에 장소 추가</button></div>`;
+  });
+  if (!t.days.length) html += `<div class="empty">날짜가 없어요. <b>이름·날짜</b>에서 여행 날짜를 정해 주세요.</div>`;
+  box.innerHTML = html;
+  const b = $('#tBack'); if (b) b.onclick = closeTrip;
+  if (!ro) {
+    $('#tEdit').onclick = () => openTripEdit(t);
+    $('#tShare').onclick = () => openShare(t);
+    if ($('#tDel')) $('#tDel').onclick = async () => {
+      if (!(await confirmBox(`'${t.name}' 여행을 삭제할까요? 즐겨찾기는 지워지지 않아요.`))) return;
+      trips = trips.filter(x => x.id !== t.id); closeTrip();
+      const { error } = await sb.from('mymap_trips').delete().eq('id', t.id);
+      if (error) { toast('삭제 실패: ' + error.message); loadTrips(); } else toast('여행을 삭제했어요');
+    };
+  }
+  box.querySelectorAll('#dayChips .chip').forEach(c => c.onclick = () => { tripDay = +c.dataset.d; if (tripDay >= 0) tripTarget = tripDay; renderTrips(); renderPins(); fitTrip(); });
+  box.querySelectorAll('[data-add]').forEach(x => x.onclick = () => { tripTarget = +x.dataset.add; openPicker(); });
+  box.querySelectorAll('.stop').forEach(row => {
+    const di = +row.dataset.d, si = +row.dataset.s, stops = t.days[di].stops;
+    row.querySelector('[data-a="go"]').onclick = () => { const p = placeById(stops[si].placeId); if (p) { tripSel = di + '-' + si; focusOn(p.lat, p.lng, Math.min(map.getLevel(), 5)); renderTrips(); } };
+    row.querySelectorAll('button[data-a]').forEach(btn => btn.onclick = () => {
+      const a = btn.dataset.a;
+      if (a === 'up' && si > 0) [stops[si - 1], stops[si]] = [stops[si], stops[si - 1]];
+      if (a === 'down' && si < stops.length - 1) [stops[si + 1], stops[si]] = [stops[si], stops[si + 1]];
+      if (a === 'del') stops.splice(si, 1);
+      tripSel = ''; saveTrip(t); renderTrips(); renderPins();
+    });
+    const mv = row.querySelector('select[data-a="move"]');
+    if (mv) mv.onchange = () => { if (mv.value === '') return; const [s] = stops.splice(si, 1); (t.days[+mv.value].stops ||= []).push(s); saveTrip(t); renderTrips(); renderPins(); toast(`${+mv.value + 1}일차로 옮겼어요`); };
+  });
+}
+
+/* 지도: 여행을 열면 번호 아이콘으로 바뀐다 */
+function renderTripPins(){
+  const t = curTrip(); if (!t) return false;
+  overlays.forEach(o => o.setMap(null)); overlays = [];
+  tripLines.forEach(l => l.setMap(null)); tripLines = [];
+  const show = tripDay < 0 ? t.days.map((_, i) => i) : [tripDay];
+  const groups = new Map();
+  show.forEach(di => {
+    const path = [];
+    (t.days[di].stops || []).forEach((s, si) => {
+      const p = placeById(s.placeId); if (!p) return;
+      path.push(new kakao.maps.LatLng(p.lat, p.lng));
+      if (!groups.has(p.id)) groups.set(p.id, { p, marks:[] });
+      groups.get(p.id).marks.push({ di, si });
+    });
+    if (path.length > 1) { const line = new kakao.maps.Polyline({ path, strokeWeight:3, strokeColor:dayColor(di), strokeOpacity:.85, strokeStyle:'shortdash' }); line.setMap(map); tripLines.push(line); }
+  });
+  groups.forEach(({ p, marks }) => {
+    const el = document.createElement('div'); el.className = 'tpin';
+    el.innerHTML = `<div class="nums">${marks.map(m => `<b style="background:${dayColor(m.di)}">${m.si + 1}</b>`).join('')}</div><div class="l">${esc(p.name)}</div>`;
+    el.addEventListener('click', e => { e.stopPropagation(); const m = marks[0]; tripSel = m.di + '-' + m.si; openTrips(); const row = document.querySelector(`.stop[data-d="${m.di}"][data-s="${m.si}"]`); if (row) row.scrollIntoView({ block:'center' }); });
+    const ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(p.lat, p.lng), content:el, xAnchor:0, yAnchor:0, zIndex:6, clickable:true });
+    ov.setMap(map); overlays.push(ov);
+  });
+  return true;
+}
+function fitTrip(){
+  const t = curTrip(); if (!t) return;
+  const pts = (tripDay < 0 ? t.days : [t.days[tripDay]]).flatMap(d => (d.stops || []).map(s => placeById(s.placeId)).filter(Boolean));
+  if (!pts.length) return;
+  if (pts.length === 1) return focusOn(pts[0].lat, pts[0].lng, 5);
+  const b = new kakao.maps.LatLngBounds(); pts.forEach(p => b.extend(new kakao.maps.LatLng(p.lat, p.lng)));
+  map.setBounds(b, 120, 40, Math.round(sheetPx()) + 20, 40);
+}
+
+/* 여행 만들기 · 수정 */
+let tripEditing = null;
+function openTripEdit(t){
+  tripEditing = t;
+  const today = new Date().toISOString().slice(0, 10);
+  $('#tmTitle').textContent = t ? '여행 수정' : '새 여행';
+  $('#tmName').value = t ? t.name : '';
+  $('#tmStart').value = t ? t.start : today;
+  $('#tmEnd').value = t ? (t.end || t.start) : today;
+  $('#tripModal').hidden = false; setTimeout(() => $('#tmName').focus(), 50);
+}
+$('#tmStart').onchange = () => { if (!$('#tmEnd').value || $('#tmEnd').value < $('#tmStart').value) $('#tmEnd').value = $('#tmStart').value; };
+$('#tmCancel').onclick = () => { $('#tripModal').hidden = true; };
+$('#tmSave').onclick = async () => {
+  const name = $('#tmName').value.trim(), start = $('#tmStart').value, end = $('#tmEnd').value || start;
+  if (!name) return toast('여행 이름을 넣어 주세요');
+  if (!start) return toast('시작 날짜를 골라 주세요');
+  if (end < start) return toast('끝 날짜가 시작 날짜보다 빨라요');
+  const dates = dateList(start, end);
+  if (dates.length >= 60) return toast('여행 기간은 60일까지 만들 수 있어요');
+  let t = tripEditing;
+  if (t) {
+    const lost = t.days.slice(dates.length).reduce((a, d) => a + (d.stops || []).length, 0);
+    if (lost && !(await confirmBox(`날짜가 줄어서 ${dates.length + 1}일차 이후의 장소 ${lost}곳이 일정에서 빠져요. 계속할까요?`, '계속'))) return;
+    t.name = name; t.start = start; t.end = end;
+    t.days = dates.map((date, i) => ({ ...(t.days[i] || { stops:[] }), date }));
+  } else {
+    t = { id:newId(), ownerId:user.id, name, start, end, days:dates.map(date => ({ date, stops:[] })), shareToken:null, updatedAt:Date.now() };
+    trips.unshift(t); tripsMissing = false;
+  }
+  $('#tripModal').hidden = true;
+  saveTrip(t, true);
+  openTrips(); openTrip(t.id);
+};
+
+/* 장소 추가: 즐겨찾기에서 고르거나, 새로 찾아서 바로 즐겨찾기+일정에 넣기 */
+let pickMode = 'fav', pickAdded = 0;
+function addStop(placeId){
+  const t = curTrip(); if (!t || !t.days[tripTarget]) return;
+  (t.days[tripTarget].stops ||= []).push({ placeId, memo:'' });
+  saveTrip(t); renderTrips(); renderPins();
+}
+async function quickSave(r){
+  const ex = isSaved(r); if (ex) return ex;
+  const c = guessCat(r);
+  const np = { ...r, id:newId(), ownerId:user.id, categories:[c], category:c, tags:[], memo:'', rating:0, visited:false, createdAt:Date.now(), updatedAt:Date.now() };
+  delete np.distance;
+  places.push(np); refreshAll();
+  await savePlace(np);
+  return np;
+}
+function openPicker(){
+  const t = curTrip(); if (!t) return;
+  pickAdded = 0; pickMode = 'fav'; $('#pkQ').value = '';
+  $('#pkTitle').textContent = `${tripTarget + 1}일차에 장소 추가`;
+  $('#pickModal').hidden = false; drawPicker();
+}
+function drawPicker(){
+  document.querySelectorAll('#pkModes .chip').forEach(c => c.classList.toggle('on', c.dataset.m === pickMode));
+  $('#pkQ').placeholder = pickMode === 'fav' ? '즐겨찾기 이름·태그·카테고리로 찾기' : '새로 찾을 가게 이름 (Enter)';
+  $('#pkDone').textContent = pickAdded ? `완료 (${pickAdded}곳 추가)` : '닫기';
+  if (pickMode === 'new') return;
+  const t = curTrip(), q = $('#pkQ').value.trim().toLowerCase();
+  const day = t.days[tripTarget].stops || [];
+  const last = placeById((day[day.length - 1] || {}).placeId);
+  let list = places.filter(p => !q || [p.name, p.address, p.roadAddress, p.memo, ...placeCats(p), ...(p.tags || [])].join(' ').toLowerCase().includes(q));
+  if (last) list.sort((a, b) => haversine(last, a) - haversine(last, b)); else list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const inDay = new Set(day.map(s => s.placeId));
+  $('#pkList').innerHTML = list.slice(0, 120).map(p => `<div class="item" data-id="${p.id}"><div class="ic" style="background:${esc(primaryCat(p).color)}22">${esc(primaryCat(p).emoji)}</div>
+      <div class="body"><div class="t"><span class="nm">${esc(p.name)}</span></div><div class="s">${last ? fmtDist(haversine(last, p)) + ' · ' : ''}${esc(placeCats(p).join(' · '))} · ${esc(p.roadAddress || p.address)}</div></div>
+      <button class="btn sm ${inDay.has(p.id) ? '' : 'pri'}">${inDay.has(p.id) ? '한 번 더' : '추가'}</button></div>`).join('')
+    || `<div class="empty">맞는 즐겨찾기가 없어요. 위의 <b>새 장소 찾기</b>로 찾아서 바로 추가할 수 있어요.</div>`;
+  $('#pkList').querySelectorAll('.item').forEach(el => el.onclick = () => { addStop(el.dataset.id); pickAdded++; drawPicker(); toast('일정에 추가했어요'); });
+}
+function pickSearch(){
+  const q = $('#pkQ').value.trim(); if (!q) return;
+  $('#pkList').innerHTML = '<div class="empty">찾는 중…</div>';
+  const t = curTrip(), day = t.days[tripTarget].stops || [], near = placeById((day[day.length - 1] || {}).placeId);
+  const opts = { size:15 }; if (near) { opts.location = new kakao.maps.LatLng(near.lat, near.lng); opts.sort = kakao.maps.services.SortBy.ACCURACY; }
+  ps.keywordSearch(q, (data, st) => {
+    if (st !== kakao.maps.services.Status.OK) { $('#pkList').innerHTML = '<div class="empty">찾지 못했어요.</div>'; return; }
+    const rs = data.map(fromKakao);
+    $('#pkList').innerHTML = rs.map((r, i) => { const s = isSaved(r); return `<div class="item" data-i="${i}"><div class="ic">${esc(catInfo(guessCat(r)).emoji)}</div>
+        <div class="body"><div class="t"><span class="nm">${esc(r.name)}</span>${s ? '<span class="tag">즐겨찾기</span>' : ''}</div><div class="s">${esc((r.kakaoCategory || '').split(' > ').slice(-1)[0])} · ${esc(r.roadAddress || r.address)}</div></div>
+        <button class="btn sm pri">${s ? '추가' : '저장+추가'}</button></div>`; }).join('');
+    $('#pkList').querySelectorAll('.item').forEach(el => el.onclick = async () => {
+      const p = await quickSave(rs[+el.dataset.i]); addStop(p.id); pickAdded++;
+      el.querySelector('button').textContent = '추가됨 ✓'; el.querySelector('button').classList.remove('pri');
+      $('#pkDone').textContent = `완료 (${pickAdded}곳 추가)`; toast('즐겨찾기에 저장하고 일정에 추가했어요');
+    });
+  }, opts);
+}
+document.querySelectorAll('#pkModes .chip').forEach(c => c.onclick = () => { pickMode = c.dataset.m; $('#pkQ').value = ''; $('#pkList').innerHTML = pickMode === 'new' ? '<div class="empty">가게 이름을 입력하고 Enter를 누르세요.<br>찾은 곳은 즐겨찾기에 저장되면서 일정에 들어가요.</div>' : ''; drawPicker(); $('#pkQ').focus(); });
+$('#pkQ').oninput = () => { if (pickMode === 'fav') drawPicker(); };
+$('#pkQ').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); if (pickMode === 'new') pickSearch(); } };
+$('#pkDone').onclick = () => { $('#pickModal').hidden = true; fitTrip(); };
+
+/* 장소 정보·즐겨찾기 상세에서 바로 일정에 넣기 */
+function tripAddBtn(){ const t = curTrip(); return t && !tripReadOnly && t.days[tripTarget] ? `<button class="btn" data-tripadd="1">🧳 ${tripTarget + 1}일차에 추가</button>` : ''; }
+function bindTripAdd(scope, r){
+  const b = scope.querySelector('[data-tripadd]'); if (!b) return;
+  b.onclick = async () => { const p = r.id && places.includes(r) ? r : await quickSave(r); addStop(p.id); toast(`${tripTarget + 1}일차에 추가했어요`); openTrips(); };
+}
+
+/* 지도 공유: 링크만 있으면 로그인 없이 보기만 가능 */
+function shareUrl(t){ return location.origin + location.pathname + '?trip=' + t.shareToken; }
+function openShare(t){
+  const draw = () => {
+    $('#shBody').innerHTML = t.shareToken
+      ? `<p class="meta">이 링크를 받은 사람은 로그인 없이 <b>일정과 지도를 볼 수만</b> 있어요. 편집은 가입·승인된 회원만 할 수 있어요.</p>
+         <input type="text" readonly value="${esc(shareUrl(t))}" id="shUrl" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;margin:8px 0">
+         <div class="acts"><button class="btn pri" id="shCopy">링크 복사</button><button class="btn danger" id="shOff">공유 끄기</button></div>`
+      : `<p class="meta">공유 링크를 만들면 받은 사람이 로그인 없이 이 여행의 일정과 지도를 볼 수 있어요. 편집은 할 수 없어요.</p>
+         <div class="acts"><button class="btn pri" id="shOn">공유 링크 만들기</button></div>`;
+    if ($('#shOn')) $('#shOn').onclick = () => { t.shareToken = newId(); saveTrip(t, true); draw(); renderTrips(); };
+    if ($('#shOff')) $('#shOff').onclick = () => { t.shareToken = null; saveTrip(t, true); draw(); renderTrips(); toast('공유를 껐어요. 이전 링크는 더 이상 열리지 않아요'); };
+    if ($('#shCopy')) $('#shCopy').onclick = async () => { try { await navigator.clipboard.writeText(shareUrl(t)); toast('링크를 복사했어요'); } catch (_) { $('#shUrl').select(); toast('링크를 길게 눌러 복사해 주세요'); } };
+  };
+  draw(); $('#shareModal').hidden = false;
+}
+$('#shClose').onclick = () => { $('#shareModal').hidden = true; };
+
+const shareToken = new URLSearchParams(location.search).get('trip');
+async function openShared(token){
+  tripReadOnly = true; document.body.classList.add('viewer'); gate('off');
+  const { data, error } = await sb.rpc('mymap_shared_trip', { token });
+  if (error || !data) { gate('error', '공유된 여행을 찾을 수 없어요.<br>공유가 꺼졌거나 링크가 잘못됐어요.'); return; }
+  sharedPlaces = (data.places || []).map(fromRow);
+  const t = { ...fromTripRow({ ...data.trip, user_id:null }), shareToken:token };
+  trips = [t]; $('#vbName').textContent = t.name;
+  openTrips(); openTrip(t.id);
+}
+$('#btnTrip').onclick = () => {
+  if (sheetIdx >= 0 && !$('#p-trips').hidden) { setSheet(-1); return; }
+  openTrips();
+};
+
 /* ---------- boot ---------- */
 function fatal(html){ const d = document.createElement('div'); d.className = 'err'; d.innerHTML = html; document.body.appendChild(d); }
 function boot(){
@@ -1794,6 +2151,7 @@ function gate(state, msg){
 function startAuth(){
   if (!window.supabase) { gate('error', '로그인 모듈을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.'); return; }
   sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } });
+  if (shareToken) { openShared(shareToken); return; }
   sb.auth.onAuthStateChange((event, session) => { setTimeout(() => handleSession(session), 0); });
   sb.auth.getSession().then(({ data }) => handleSession(data.session));
 }
@@ -1824,6 +2182,7 @@ async function handleSession(session){
   gate('off');
   await loadPeople();
   await loadAll();
+  await loadTrips();
   subscribe();
   await migrateLegacy();
   handling = null;
